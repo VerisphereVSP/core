@@ -19,9 +19,7 @@ contract PostRegistryMemoTest is Test {
     address constant OTHER = address(0xBEEF);
 
     // mirror of the contract event for expectEmit
-    event PostAnnotated(
-        uint256 indexed postId, address indexed creator, bytes32 contentHash, string uri
-    );
+    event PostAnnotated(uint256 indexed postId, address indexed creator, bytes32 contentHash, string uri);
 
     function setUp() public {
         vsp = new MockVSP();
@@ -30,9 +28,7 @@ contract PostRegistryMemoTest is Test {
             address(
                 new ERC1967Proxy(
                     address(new PostRegistry(address(0))),
-                    abi.encodeCall(
-                        PostRegistry.initialize, (address(this), address(vsp), address(policy))
-                    )
+                    abi.encodeCall(PostRegistry.initialize, (address(this), address(vsp), address(policy)))
                 )
             )
         );

@@ -91,9 +91,7 @@ contract PostRegistry is GovernedUpgradeable {
     /// @notice Emitted when a post's creator attaches an off-chain memo.
     /// Event-only (no storage); append-only (latest emission is current);
     /// contentHash = keccak256 of the memo content (tamper-evidence), uri locates it.
-    event PostAnnotated(
-        uint256 indexed postId, address indexed creator, bytes32 contentHash, string uri
-    );
+    event PostAnnotated(uint256 indexed postId, address indexed creator, bytes32 contentHash, string uri);
 
     error InvalidClaim();
     error ClaimTooLong(uint256 length, uint256 max);
@@ -212,10 +210,7 @@ contract PostRegistry is GovernedUpgradeable {
     /// @param postId The post to annotate (must exist and be caller's).
     /// @param contentHash keccak256 of the memo content.
     /// @param uri Locator for the memo content (e.g. https/ipfs).
-    function setMemo(uint256 postId, bytes32 contentHash, string calldata uri)
-        external
-        whenNotPaused
-    {
+    function setMemo(uint256 postId, bytes32 contentHash, string calldata uri) external whenNotPaused {
         if (!_exists(postId)) {
             revert PostDoesNotExist();
         }
