@@ -88,6 +88,12 @@ contract PostRegistry is GovernedUpgradeable {
     event PostCreated(uint256 indexed postId, address indexed creator, ContentType contentType);
     event LinkGraphSet(address indexed linkGraph);
     event FeeBurned(uint256 indexed postId, uint256 feeAmount);
+    /// @notice Emitted when a post's creator attaches an off-chain memo.
+    /// Event-only (no storage); append-only (latest emission is current);
+    /// contentHash = keccak256 of the memo content (tamper-evidence), uri locates it.
+    event PostAnnotated(
+        uint256 indexed postId, address indexed creator, bytes32 contentHash, string uri
+    );
 
     error InvalidClaim();
     error ClaimTooLong(uint256 length, uint256 max);
@@ -99,6 +105,8 @@ contract PostRegistry is GovernedUpgradeable {
     error ToPostDoesNotExist();
     error FromPostMustBeClaim();
     error ToPostMustBeClaim();
+    error PostDoesNotExist();
+    error NotPostCreator();
     error LinkGraphZeroAddress();
     error LinkGraphNotSet();
     error FeeTransferFailed();
@@ -194,6 +202,27 @@ contract PostRegistry is GovernedUpgradeable {
         claimHashToPostIdPlusOne[normalizedHash] = postId + 1;
 
         emit PostCreated(postId, _msgSender(), ContentType.Claim);
+    }
+
+    /// @notice Attach an off-chain memo to a post you created. Emits an event
+    /// only -- no on-chain storage, no change to post creation cost. May be
+    /// called repeatedly (append-only); off-chain consumers treat the latest
+    /// PostAnnotated for a post as current. Content lives off-chain at `uri`;
+    /// `contentHash` is keccak256(content) for tamper-evidence.
+    /// @param postId The post to annotate (must exist and be caller's).
+    /// @param contentHash keccak256 of the memo content.
+    /// @param uri Locator for the memo content (e.g. https/ipfs).
+    function setMemo(uint256 postId, bytes32 contentHash, string calldata uri)
+        external
+        whenNotPaused
+    {
+        if (!_exists(postId)) {
+            revert PostDoesNotExist();
+        }
+        if (posts[postId].creator != _msgSender()) {
+            revert NotPostCreator();
+        }
+        emit PostAnnotated(postId, _msgSender(), contentHash, uri);
     }
 
     /// @notice Create a link between two claims.
