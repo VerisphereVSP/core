@@ -4,6 +4,8 @@ pragma solidity ^0.8.20;
 import "forge-std/Script.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "@openzeppelin/contracts/governance/TimelockController.sol";
+// patch_oneshot_genesis: audited linear lock for the genesis treasury tranche
+import "@openzeppelin/contracts/finance/VestingWallet.sol";
 
 import "../src/authority/Authority.sol";
 import "../src/VSPToken.sol";
@@ -88,15 +90,15 @@ contract Deploy is Script {
 
         // patch_stakeengine_exempt_precompute: single-pass wiring of VSPToken's cap-exemption
         // target = the StakeEngine proxy, precomputed by nonce offset from this getNonce().
-        // patch_fix_nonce_offset_setminter (2026-06-24): offset is +5, not +3 — the original
-        // counted only CREATEs and missed two nonce-consuming CALLs, authority.setMinter(gov)
-        // and setBurner(gov), that sit between the token proxy and the StakeEngine deploy.
+        // patch_oneshot_genesis (2026-07-29): offset is +3 — the treasury-worker
+        // minter/burner grants that sat between the token proxy and the StakeEngine
+        // deploy are REMOVED (worker decommissioned with the public-AMM pivot; no
+        // standing non-protocol minter exists under the one-shot supply model).
         // Full nonce accounting from this getNonce():
         //   +0 VSPToken impl (CREATE)     +1 token proxy (CREATE)
-        //   +2 setMinter(gov) (CALL)      +3 setBurner(gov) (CALL)
-        //   +4 StakeEngine impl (CREATE)  +5 StakeEngine proxy (CREATE)  <- exemption target
+        //   +2 StakeEngine impl (CREATE)  +3 StakeEngine proxy (CREATE)  <- exemption target
         // The require() after the StakeEngine deploy still fails loud if this ever drifts.
-        address predictedStakeProxy = vm.computeCreateAddress(deployer, vm.getNonce(deployer) + 5);
+        address predictedStakeProxy = vm.computeCreateAddress(deployer, vm.getNonce(deployer) + 3);
         VSPToken tokenImpl = new VSPToken(
             // patch_bundle10_5_part1_fixup_doc_sync_sol: DO NOT CHANGE the address(0) below.
             // VSPToken MUST NOT trust any ERC-2771 forwarder. The Forwarder
@@ -110,9 +112,15 @@ contract Deploy is Script {
             // Part 1 fixup ceremony — see THREAT-MODEL §4.6 F11/G-47).
             // The post-deploy require() below enforces this at deploy time.
             address(0),
+            // patch_oneshot_genesis: defaults changed for the one-shot supply model.
+            // INCEPTION_SUPPLY defaults to the full genesis supply and GROWTH_BASE
+            // defaults to 1e18 (1x/yr = FLAT cap): after the genesis mint fills the
+            // curve exactly, capped minters have ZERO headroom forever — even a
+            // wrongly-granted future minter cannot mint. StakeEngine (exempt) is
+            // the only address that can move supply, per protocol staking mechanics.
             vm.envOr("VSP_INCEPTION_TIMESTAMP", uint256(1778544000)),
-            vm.envOr("VSP_INCEPTION_SUPPLY", uint256(1000 * 1e18)),
-            vm.envOr("VSP_GROWTH_BASE_PER_YEAR", uint256(10 * 1e18)),
+            vm.envOr("VSP_INCEPTION_SUPPLY", uint256(1_000_002_000 * 1e18)),
+            vm.envOr("VSP_GROWTH_BASE_PER_YEAR", uint256(1e18)),
             predictedStakeProxy // patch_bundle10_5_part2a_stakeengine_exempt
         ); // patch_bundle10_5_part2a_timecap: 4-arg constructor
         ERC1967Proxy tokenProxy =
@@ -124,18 +132,12 @@ contract Deploy is Script {
         // forwarder, the deploy itself reverts here. See THREAT-MODEL §4.6 F11/G-47.
         require(token.trustedForwarder() == address(0), "Deploy: VSPToken must not trust any forwarder");
 
-        // patch_worker_minter: the treasury worker is the sole non-protocol minter/burner.
-        // It mints VSP into MM when liquidity is low and burns when MM is over-band
-        // (app/treasury_worker.py). Granted IN PLACE OF the deployer (dev and prod identical):
-        // no human EOA is ever a standing minter. StakeEngine keeps its own grant below for
-        // protocol gain-mints. This is a swap (2 CALLs -> 2 CALLs, same slot), so the nonce
-        // count the +5 StakeEngine-exemption precompute depends on is unchanged.
-        // NOTE: with the deployer un-granted, fundmm.sh / fund-prelaunch.sh (which mint via
-        // the deployer) no longer work; MM liquidity comes solely from the worker's mint cycle.
-        address worker = vm.envAddress("MM_TREASURY_WORKER_ADDRESS");
-        require(worker != address(0), "Deploy: MM_TREASURY_WORKER_ADDRESS required");
-        authority.setMinter(worker, true);
-        authority.setBurner(worker, true);
+        // patch_oneshot_genesis: the treasury-worker minter/burner grants are REMOVED.
+        // Under the one-shot supply model there is no standing non-protocol minter:
+        // the entire tradable/treasury supply is minted once, below, inside this
+        // deploy (while the deployer still holds the Authority-constructor auto-grant,
+        // revoked at the end of this script). MM_TREASURY_WORKER_ADDRESS is no longer
+        // read; fundmm.sh / fund-prelaunch.sh remain non-functional by design.
 
         // Implementation contracts take forwarder in constructor (OZ 5.5 immutable pattern)
         StakeEngine stakeImpl = new StakeEngine(forwarder);
@@ -196,6 +198,32 @@ contract Deploy is Script {
             )
         );
 
+        // ── patch_oneshot_genesis: ONE-SHOT GENESIS MINT + LOCK ──
+        // The full supply is minted here, once, split liquid/locked:
+        //   liquid  -> GENESIS_TREASURY (LP seed + board-authorized ops/grants)
+        //   locked  -> OZ VestingWallet (linear release to GENESIS_TREASURY)
+        // The deployer can mint ONLY inside this script (Authority constructor
+        // auto-grant, revoked at the end). Liquid+locked must equal
+        // VSP_INCEPTION_SUPPLY so the flat cap is filled exactly: any later
+        // capped mint of even 1 wei reverts MintExceedsTimeWindowCap.
+        address genesisTreasury = vm.envOr("VSP_GENESIS_TREASURY", deployer);
+        uint256 genesisLiquid = vm.envOr("VSP_GENESIS_LIQUID_SUPPLY", uint256(100_002_000 * 1e18));
+        uint256 genesisLocked = vm.envOr("VSP_GENESIS_LOCKED_SUPPLY", uint256(900_000_000 * 1e18));
+        require(
+            genesisLiquid + genesisLocked == token.INCEPTION_SUPPLY(),
+            "Deploy: genesis liquid+locked must equal VSP_INCEPTION_SUPPLY (fill the flat cap exactly)"
+        );
+        uint64 vestStart = uint64(vm.envOr("VSP_VESTING_START_TS", uint256(token.INCEPTION_TIMESTAMP())));
+        uint64 vestDuration = uint64(vm.envOr("VSP_VESTING_DURATION_SECONDS", uint256(4 * 365 days)));
+        VestingWallet vestingWallet = new VestingWallet(genesisTreasury, vestStart, vestDuration);
+        token.mint(genesisTreasury, genesisLiquid);
+        token.mint(address(vestingWallet), genesisLocked);
+        require(token.totalSupply() == token.INCEPTION_SUPPLY(), "Deploy: genesis mint != inception supply");
+        console.log("GENESIS: total supply (wei):", token.totalSupply());
+        console.log("GENESIS: liquid -> treasury:", genesisTreasury);
+        console.log("GENESIS: locked -> VestingWallet:", address(vestingWallet));
+        console.log("GENESIS: vesting start / duration (s):", vestStart, vestDuration);
+
         vm.label(address(registry), "PostRegistry");
         vm.label(address(graph), "LinkGraph");
         vm.label(address(stake), "StakeEngine");
@@ -250,6 +278,8 @@ contract Deploy is Script {
             vm.toString(address(viewsProxy)),
             '","ProtocolPolicy":"',
             vm.toString(address(protocolPolicy)),
+            '","VestingWallet":"',
+            vm.toString(address(vestingWallet)),
             '"}'
         );
 

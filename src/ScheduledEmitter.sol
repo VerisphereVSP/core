@@ -11,6 +11,13 @@ interface IEmitterToken {
     function mint(address to, uint256 amount) external;
 }
 
+/// ############################  SUPERSEDED — NOT DEPLOYED  #################
+/// # 2026-07-29: the one-shot genesis supply model (patch_oneshot_genesis)  #
+/// # supersedes scheduled emission before this contract ever deployed.      #
+/// # Retained in-tree as the reference implementation of the               #
+/// # price-independent schedule design (see patches/log/oneshot-genesis.md #
+/// # and corporate/legal-memo-2026-07.md C1). Do not wire into Deploy.     #
+/// ###########################################################################
 /// @title ScheduledEmitter
 /// @notice Immutable, nudge-driven, PRICE-INDEPENDENT VSP issuance. Replaces the
 ///         treasury worker's discretionary MM-funding mint with a fixed on-chain
