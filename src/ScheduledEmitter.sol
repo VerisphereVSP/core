@@ -102,12 +102,24 @@ contract ScheduledEmitter {
         address worker_,
         uint256 startAt_
     ) {
-        if (token_ == address(0)) revert ZeroToken();
-        if (recipient_ == address(0)) revert ZeroRecipient();
-        if (interval_ == 0) revert ZeroInterval();
-        if (amount_ == 0) revert ZeroAmount();
-        if (cap_ < amount_) revert CapBelowAmount();
-        if (workerOnly_ && worker_ == address(0)) revert NotWorker();
+        if (token_ == address(0)) {
+            revert ZeroToken();
+        }
+        if (recipient_ == address(0)) {
+            revert ZeroRecipient();
+        }
+        if (interval_ == 0) {
+            revert ZeroInterval();
+        }
+        if (amount_ == 0) {
+            revert ZeroAmount();
+        }
+        if (cap_ < amount_) {
+            revert CapBelowAmount();
+        }
+        if (workerOnly_ && worker_ == address(0)) {
+            revert NotWorker();
+        }
 
         TOKEN = IEmitterToken(token_);
         RECIPIENT = recipient_;
@@ -128,11 +140,17 @@ contract ScheduledEmitter {
     ///         Reverts otherwise. Idempotent-safe to call as often as desired.
     /// @return minted the amount actually minted this call.
     function emit_() external returns (uint256 minted) {
-        if (finished) revert EmitterFinished();
-        if (WORKER_ONLY && msg.sender != WORKER) revert NotWorker();
+        if (finished) {
+            revert EmitterFinished();
+        }
+        if (WORKER_ONLY && msg.sender != WORKER) {
+            revert NotWorker();
+        }
 
         uint256 earliest = lastEmission + INTERVAL;
-        if (block.timestamp < earliest) revert TooSoon(block.timestamp, earliest);
+        if (block.timestamp < earliest) {
+            revert TooSoon(block.timestamp, earliest);
+        }
 
         uint256 supply = TOKEN.totalSupply();
         if (supply >= CAP) {
@@ -146,7 +164,9 @@ contract ScheduledEmitter {
         uint256 toMint = AMOUNT;
         unchecked {
             uint256 room = CAP - supply; // supply < CAP guaranteed above
-            if (toMint > room) toMint = room;
+            if (toMint > room) {
+                toMint = room;
+            }
         }
 
         TOKEN.mint(RECIPIENT, toMint);
@@ -165,8 +185,12 @@ contract ScheduledEmitter {
     /// @notice View: is an emission currently due (time elapsed, not finished,
     ///         under cap)? Lets a worker/keeper cheaply decide whether to nudge.
     function emissionDue() external view returns (bool) {
-        if (finished) return false;
-        if (block.timestamp < lastEmission + INTERVAL) return false;
+        if (finished) {
+            return false;
+        }
+        if (block.timestamp < lastEmission + INTERVAL) {
+            return false;
+        }
         return TOKEN.totalSupply() < CAP;
     }
 

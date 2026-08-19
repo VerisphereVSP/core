@@ -61,10 +61,15 @@ contract SeedPool is Script {
         vm.writeFile(
             string.concat("broadcast/SeedPool.s.sol/", vm.toString(block.chainid), "/pool.json"),
             string.concat(
-                '{"MockCPAMM":"', vm.toString(address(pool)),
-                '","seedVspWei":"', vm.toString(seedVsp),
-                '","seedUsdcUnits":"', vm.toString(seedUsdc),
-                '","lpShares":"', vm.toString(minted), '"}'
+                '{"MockCPAMM":"',
+                vm.toString(address(pool)),
+                '","seedVspWei":"',
+                vm.toString(seedVsp),
+                '","seedUsdcUnits":"',
+                vm.toString(seedUsdc),
+                '","lpShares":"',
+                vm.toString(minted),
+                '"}'
             )
         );
     }

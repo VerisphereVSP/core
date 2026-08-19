@@ -70,9 +70,7 @@ contract GenesisOneShotTest is Test {
         authority.setMinter(rando, true); // even a wrongly-granted minter...
         vm.warp(INCEPTION_TS + 3650 days); // ...even a decade later
         vm.prank(rando);
-        vm.expectRevert(
-            abi.encodeWithSelector(VSPToken.MintExceedsTimeWindowCap.selector, GENESIS + 1, GENESIS)
-        );
+        vm.expectRevert(abi.encodeWithSelector(VSPToken.MintExceedsTimeWindowCap.selector, GENESIS + 1, GENESIS));
         token.mint(rando, 1);
     }
 

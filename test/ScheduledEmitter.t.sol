@@ -13,7 +13,9 @@ contract MockVSP is IVSPToken {
     mapping(address => bool) public minter;
     mapping(address => uint256) public balanceOf;
 
-    function setMinter(address who, bool ok) external { minter[who] = ok; }
+    function setMinter(address who, bool ok) external {
+        minter[who] = ok;
+    }
 
     function mint(address to, uint256 amount) external override {
         require(minter[msg.sender], "not minter");
@@ -39,13 +41,9 @@ contract ScheduledEmitterTest is Test {
         vm.warp(1_700_000_000); // a realistic start ts, not 0
     }
 
-    function _deploy(bool workerOnly, uint256 cap, uint256 startAt)
-        internal
-        returns (ScheduledEmitter e)
-    {
+    function _deploy(bool workerOnly, uint256 cap, uint256 startAt) internal returns (ScheduledEmitter e) {
         e = new ScheduledEmitter(
-            address(token), recipient, INTERVAL, AMOUNT, cap,
-            workerOnly, workerOnly ? worker : address(0), startAt
+            address(token), recipient, INTERVAL, AMOUNT, cap, workerOnly, workerOnly ? worker : address(0), startAt
         );
         token.setMinter(address(e), true);
     }
@@ -55,22 +53,27 @@ contract ScheduledEmitterTest is Test {
         vm.expectRevert(ScheduledEmitter.ZeroToken.selector);
         new ScheduledEmitter(address(0), recipient, INTERVAL, AMOUNT, CAP, false, address(0), 0);
     }
+
     function test_ctor_rejects_zero_recipient() public {
         vm.expectRevert(ScheduledEmitter.ZeroRecipient.selector);
         new ScheduledEmitter(address(token), address(0), INTERVAL, AMOUNT, CAP, false, address(0), 0);
     }
+
     function test_ctor_rejects_zero_interval() public {
         vm.expectRevert(ScheduledEmitter.ZeroInterval.selector);
         new ScheduledEmitter(address(token), recipient, 0, AMOUNT, CAP, false, address(0), 0);
     }
+
     function test_ctor_rejects_zero_amount() public {
         vm.expectRevert(ScheduledEmitter.ZeroAmount.selector);
         new ScheduledEmitter(address(token), recipient, INTERVAL, 0, CAP, false, address(0), 0);
     }
+
     function test_ctor_rejects_cap_below_amount() public {
         vm.expectRevert(ScheduledEmitter.CapBelowAmount.selector);
         new ScheduledEmitter(address(token), recipient, INTERVAL, AMOUNT, AMOUNT - 1, false, address(0), 0);
     }
+
     function test_ctor_rejects_workeronly_zero_worker() public {
         vm.expectRevert(ScheduledEmitter.NotWorker.selector);
         new ScheduledEmitter(address(token), recipient, INTERVAL, AMOUNT, CAP, true, address(0), 0);
@@ -106,9 +109,7 @@ contract ScheduledEmitterTest is Test {
         e.emit_(); // t0
         uint256 t0 = block.timestamp;
         vm.warp(t0 + INTERVAL - 1);
-        vm.expectRevert(
-            abi.encodeWithSelector(ScheduledEmitter.TooSoon.selector, block.timestamp, t0 + INTERVAL)
-        );
+        vm.expectRevert(abi.encodeWithSelector(ScheduledEmitter.TooSoon.selector, block.timestamp, t0 + INTERVAL));
         e.emit_();
         vm.warp(t0 + INTERVAL);
         e.emit_(); // now allowed
@@ -172,12 +173,14 @@ contract ScheduledEmitterTest is Test {
         vm.expectRevert(ScheduledEmitter.NotWorker.selector);
         e.emit_();
     }
+
     function test_workeronly_worker_ok() public {
         ScheduledEmitter e = _deploy(true, CAP, 0);
         vm.prank(worker);
         e.emit_();
         assertEq(token.totalSupply(), AMOUNT);
     }
+
     function test_permissionless_stranger_ok() public {
         ScheduledEmitter e = _deploy(false, CAP, 0);
         vm.prank(stranger);
@@ -210,9 +213,8 @@ contract ScheduledEmitterTest is Test {
 
         MockVSP token2 = new MockVSP();
         vm.warp(block.timestamp); // same ts
-        ScheduledEmitter b = new ScheduledEmitter(
-            address(token2), recipient, INTERVAL, AMOUNT, CAP, false, address(0), 0
-        );
+        ScheduledEmitter b =
+            new ScheduledEmitter(address(token2), recipient, INTERVAL, AMOUNT, CAP, false, address(0), 0);
         token2.setMinter(address(b), true);
         b.emit_();
         assertEq(token2.totalSupply(), supplyAfterA, "emission must depend only on time+cap");
