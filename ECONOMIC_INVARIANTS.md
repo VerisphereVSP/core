@@ -10,6 +10,18 @@ These invariants are intended to be **testable** (unit/fuzz/property tests) and 
 
 ---
 
+## 0. Supply Model (one-shot genesis) <!-- patch_pushunblock_supplymodel -->
+
+Genesis mints the entire allocation once (patch_oneshot_genesis). Thereafter,
+total supply changes ONLY through StakeEngine accrual: mint and burn via
+VSPToken, authorized by Authority (StakeEngine is exempt from the time-based
+supply cap in VSPToken — an engine-side accrual error is therefore not bounded
+by the token, which is why the accrual math and the mint path must be reviewed
+together). There is NO scheduled emission and no other minter. ScheduledEmitter,
+the superseded price-independent schedule design (never deployed, never wired),
+was removed from the tree on 2026-08-21; the reference implementation is
+preserved at git tag `scheduled-emitter-ref`.
+
 ## I. Token Conservation & Accounting Invariants (StakeEngine)
 
 ### I.1 Contract balance matches staked totals
