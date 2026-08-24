@@ -5,6 +5,8 @@ permissions:
 
 on:
   push:
+    branches: [main]   # not tags: reference/release tags point at historical
+                       # trees that fail current gates by design (e.g. scheduled-emitter-ref)
   pull_request:
   workflow_dispatch:
 
