@@ -116,8 +116,23 @@ contract StakeEngine is GovernedUpgradeable {
 
     /// @notice Hard floor on snapshotPeriod. Prevents gas-grief at sub-hour periods.
     uint256 public constant MIN_SNAPSHOT_PERIOD = 1 hours;
-    /// @notice Hard cap on snapshotPeriod. Prevents yield freeze at multi-year periods.
-    uint256 public constant MAX_SNAPSHOT_PERIOD = 365 days;
+    /// @notice Hard cap on snapshotPeriod. Prevents yield freeze at multi-year
+    ///         periods AND closes the mid-window accrual asymmetry.
+    /// @dev patch_sec_jit_window (2026-08-19, external report VSP-SEC-001):
+    ///      settlement scales the rate by `epochsElapsed` and applies the result
+    ///      to whatever lots exist at settlement time -- `StakeLot.entryEpoch` is
+    ///      stored but never read. Whenever snapshotPeriod > EPOCH_LENGTH the
+    ///      snapshot is SUPPRESSED mid-window, so (a) a lot joining late in the
+    ///      window collects the whole window's accrual, and (b) a lot leaving
+    ///      before the window closes escapes the whole window's decay.
+    ///      Capping the period at one epoch makes `periodInEpochs == 1`, so any
+    ///      interaction settles every elapsed epoch BEFORE mutating the lot set
+    ///      (stake() and withdraw() both call _maybeSnapshot first) -- which
+    ///      closes both directions.
+    ///      Prorating by entryEpoch was the reporter's suggestion; it fixes only
+    ///      direction (a), and cannot fix it for the pooled tail bucket at all,
+    ///      since _settleBucket is an O(1) index rebase with no per-entry epochs.
+    uint256 public constant MAX_SNAPSHOT_PERIOD = EPOCH_LENGTH;
     /// @notice Hard cap on sMaxDecayMaxEpochs. Prevents OOG in _projectSMaxDecay.
     uint256 public constant MAX_SMAX_DECAY_EPOCHS = 10000;
     // bundle05_a: G-9/G-10 bounds (10M VSP cap on stake amount and setStake target).

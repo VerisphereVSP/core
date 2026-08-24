@@ -147,7 +147,7 @@ contract GovernanceTransferTest is Test {
         vm.prank(newGov);
         engine.acceptGovernance();
 
-        uint256 newPeriod = 7 days;
+        uint256 newPeriod = 6 hours; // patch_sec_jit_window: must be <= MAX_SNAPSHOT_PERIOD
         vm.prank(newGov);
         engine.setSnapshotPeriod(newPeriod);
         assertEq(engine.snapshotPeriod(), newPeriod, "newGov should be able to set period");
@@ -255,7 +255,7 @@ contract GovernanceTransferTest is Test {
         // From here on, every onlyGovernance call must be initiated by
         // the timelock (in production, scheduled by the Safe).
         vm.prank(timelock);
-        engine.setSnapshotPeriod(2 days);
-        assertEq(engine.snapshotPeriod(), 2 days);
+        engine.setSnapshotPeriod(6 hours); // patch_sec_jit_window: <= MAX_SNAPSHOT_PERIOD
+        assertEq(engine.snapshotPeriod(), 6 hours);
     }
 }
