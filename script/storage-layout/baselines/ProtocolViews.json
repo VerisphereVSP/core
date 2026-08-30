@@ -2,7 +2,7 @@
   "_meta": {
     "contract": "src/ProtocolViews.sol:ProtocolViews",
     "forge_version": "forge Version: 1.5.1-stable",
-    "generated_at": "2026-06-06T22:12:43Z",
+    "generated_at": "2026-08-30T16:23:28Z",
     "layout_sha256": "7e0dd0a50cb0193f7d9ce96b4adc4beff6b14bc0a39465f60e8bcc67c40ae766",
     "note": "Storage-layout regression baseline. Regenerate ONLY for an intended, reviewed, upgrade-safe layout change via check.sh --update.",
     "schema": 2

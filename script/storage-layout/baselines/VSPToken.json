@@ -2,7 +2,7 @@
   "_meta": {
     "contract": "src/VSPToken.sol:VSPToken",
     "forge_version": "forge Version: 1.5.1-stable",
-    "generated_at": "2026-06-06T22:12:42Z",
+    "generated_at": "2026-08-30T16:23:26Z",
     "layout_sha256": "0b1448c0be9927bec521781557328057cb4d47f80f1b44871f099ea3eeac372c",
     "note": "Storage-layout regression baseline. Regenerate ONLY for an intended, reviewed, upgrade-safe layout change via check.sh --update.",
     "schema": 2

@@ -2,7 +2,7 @@
   "_meta": {
     "contract": "src/LinkGraph.sol:LinkGraph",
     "forge_version": "forge Version: 1.5.1-stable",
-    "generated_at": "2026-06-06T22:12:43Z",
+    "generated_at": "2026-08-30T16:23:27Z",
     "layout_sha256": "fb03396e84e6a488de35bd3ac65191f1c71af10a6366d27f24a1f5cbcfe50c93",
     "note": "Storage-layout regression baseline. Regenerate ONLY for an intended, reviewed, upgrade-safe layout change via check.sh --update.",
     "schema": 2
