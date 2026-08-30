@@ -324,25 +324,27 @@ contract StakeEngine is GovernedUpgradeable {
         PostState storage ps = posts[postId];
         SideQueue storage q = ps.sides[side];
         uint256 removed = 0;
-        uint256 i = q.lots.length;
-        while (i > 0) {
-            i--;
-            if (q.lots[i].amount == 0) {
-                address ghostStaker = q.lots[i].staker;
-                if (i == q.lots.length - 1) {
-                    _setLotIndex(ps, ghostStaker, side, 0);
-                    q.lots.pop();
-                } else {
-                    uint256 lastIdx = q.lots.length - 1;
-                    StakeLot storage lastLot = q.lots[lastIdx];
-                    address lastStaker = lastLot.staker;
-                    q.lots[i] = lastLot;
-                    _setLotIndex(ps, lastStaker, side, i + 1);
-                    _setLotIndex(ps, ghostStaker, side, 0);
-                    q.lots.pop();
-                }
+        // S-08 FIX: single forward read/write compaction pass instead of reverse
+        // swap-and-pop, so survivors keep arrival order. Swap-and-pop moved the
+        // LAST staker into the ghost's slot, promoting them at another honest
+        // staker's expense.
+        uint256 write = 0;
+        uint256 len = q.lots.length;
+        for (uint256 read = 0; read < len; read++) {
+            StakeLot storage src = q.lots[read];
+            if (src.amount == 0) {
+                _setLotIndex(ps, src.staker, side, 0);
                 removed++;
+                continue;
             }
+            if (write != read) {
+                q.lots[write] = src;
+            }
+            _setLotIndex(ps, q.lots[write].staker, side, write + 1);
+            write++;
+        }
+        for (uint256 k = 0; k < removed; k++) {
+            q.lots.pop();
         }
         if (removed == 0) {
             revert NoGhostLots();
@@ -813,7 +815,10 @@ contract StakeEngine is GovernedUpgradeable {
         bool supportWins = vsNum > 0;
         uint256 absVS = uint256(vsNum > 0 ? vsNum : -vsNum);
         uint256 epochsElapsed = currentEpoch - ps.lastSnapshotEpoch;
-        uint256 projSMax = _projectSMaxDecay(currentEpoch);
+        // S-10 FIX: settlement (_forceSnapshot) divides by the RAW sMax, so the
+        // view must too, otherwise V.8 (view == materialised) breaks whenever
+        // topPosts is empty and the decay fallback is live.
+        uint256 projSMax = sMax;
         if (projSMax == 0) {
             return (A, D);
         }
@@ -884,7 +889,8 @@ contract StakeEngine is GovernedUpgradeable {
         bool aligned = (supportWins && isSupportSide) || (!supportWins && !isSupportSide);
         uint256 absVS = uint256(vsNum > 0 ? vsNum : -vsNum);
         uint256 epochsElapsed = currentEpoch - ps.lastSnapshotEpoch;
-        uint256 projSMax = _projectSMaxDecay(currentEpoch);
+        // S-10 FIX (second site): same reasoning as _projectTotals.
+        uint256 projSMax = sMax;
         if (projSMax == 0) {
             return lot.amount;
         }
@@ -1192,7 +1198,33 @@ contract StakeEngine is GovernedUpgradeable {
 
         uint256 idx = _getLotIndex(ps, user, side);
         if (idx != 0) {
-            q.lots[idx - 1].amount += amount; // existing ranked staker
+            if (q.lots[idx - 1].amount == 0) {
+                // S-02 FIX v2: remove the ghost from the array (shift-compact,
+                // preserving arrival order) before re-entering, so one address can
+                // never hold both a ghost entry and a live entry.
+                uint256 gIdx = idx - 1;
+                uint256 lastG = q.lots.length - 1;
+                for (uint256 i = gIdx; i < lastG; i++) {
+                    q.lots[i] = q.lots[i + 1];
+                    _setLotIndex(ps, q.lots[i].staker, side, i + 1);
+                }
+                q.lots.pop();
+                _setLotIndex(ps, user, side, 0);
+
+                if (q.lots.length < MAX_RANKED_LOTS) {
+                    _pushRankedLot(ps, q, side, user, amount);
+                } else {
+                    uint256 sIdxG = _smallestRankedIndex(q);
+                    if (amount > q.lots[sIdxG].amount) {
+                        _demoteRankedToBucket(postId, ps, q, side, sIdxG);
+                        _pushRankedLot(ps, q, side, user, amount);
+                    } else {
+                        _bucketAdd(ps, q, side, user, amount);
+                    }
+                }
+            } else {
+                q.lots[idx - 1].amount += amount; // existing ranked staker
+            }
         } else if (_getBucketShares(ps, user, side) != 0) {
             _bucketAdd(ps, q, side, user, amount); // existing bucket member (may promote via _rebalance)
         } else if (q.lots.length < MAX_RANKED_LOTS) {
