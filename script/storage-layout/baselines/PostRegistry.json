@@ -2,7 +2,7 @@
   "_meta": {
     "contract": "src/PostRegistry.sol:PostRegistry",
     "forge_version": "forge Version: 1.5.1-stable",
-    "generated_at": "2026-06-06T22:12:42Z",
+    "generated_at": "2026-08-30T16:23:27Z",
     "layout_sha256": "54702a408a0cec2bab610a395100ff95653cb59246825210f775fee149d21b07",
     "note": "Storage-layout regression baseline. Regenerate ONLY for an intended, reviewed, upgrade-safe layout change via check.sh --update.",
     "schema": 2

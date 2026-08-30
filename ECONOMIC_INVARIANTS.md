@@ -59,22 +59,35 @@ More generally:
 
 ---
 
-### I.4 sMax tracks the current leader
-`sMax` is snapped to the largest active post's total via the top-3
-leader tracker on every interaction. There is no slow decay during
-normal operation: as soon as the previous leader withdraws below the
-second-place total, `sMax` snaps down to the new leader. A
-governance-configurable fallback exponential decay (currently 10% per
-epoch capped at 30 epochs) only runs when no post has any stake, so
-that a stale `sMax` cannot stay frozen forever after a complete
-unwind. It is floored at the current leader's total
-and raised immediately when a post exceeds it.
+### I.4 sMax tracks the current leader (patch_prC_rulings)
+`sMax` is a high-water mark over post totals with three movements and
+no others: (1) it RAISES immediately to any tracked post total that
+meets or exceeds it; (2) it DESCENDS only by the governance-configured
+exponential decay (10%/epoch, capped at 30 epochs of catch-up),
+floored at the tracked leader's total; (3) it never snaps down (S-03
+layer i — the pre-PR-C immediate snap-down is gone).
+
+The tracker is a TRACKED_POSTS(=10)-slot leader board. Because accrual
+is lazy, a dormant post's stored total can sit above every tracked
+total; while that holds, `sMax >= true leader` is not guaranteed by
+the tracker alone. That deviation is CLOSEABLE BY ANYONE at any time
+via the permissionless `refreshSMax(postId)` (S-03 layer ii), which
+settles the post if an epoch has passed and feeds its true stored
+total to the tracker; the ops worker pokes the largest known posts
+each epoch. So I.4 is true-about-this-mechanism: `sMax >=` every
+TRACKED total at all times after update, `sMax >=` any specific post's
+total the moment anyone refreshes it, and participation factors are
+clamped at 1.0 in all cases, bounding the worst pre-poke effect at the
+rMax ceiling.
 
 **Safety statement**
 - Decay prevents historical peaks from permanently suppressing
-  participation factors on future posts.
-- sMax >= leaderTotal at all times (after update), so participation
-  factors remain <= 1.0 in steady state.
+  participation factors on future posts; the tracked-leader floor
+  prevents decay from undershooting anything the tracker can see.
+- Dust posts cannot drag `sMax` down (never-snap-down), and dormant
+  giants cannot be hidden from it for longer than one poke.
+- S-04 ratification: participation coupling every post's rate to the
+  global leader via `sMax` is intended design, not a defect.
 
 ---
 

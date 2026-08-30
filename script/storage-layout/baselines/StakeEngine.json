@@ -2,8 +2,8 @@
   "_meta": {
     "contract": "src/StakeEngine.sol:StakeEngine",
     "forge_version": "forge Version: 1.5.1-stable",
-    "generated_at": "2026-07-02T07:36:32Z",
-    "layout_sha256": "d6736eac0780134174ef54569c191d6df4ba79690af5da80d673602bfe1b333b",
+    "generated_at": "2026-08-30T16:23:26Z",
+    "layout_sha256": "bccba5d07691352c8ea273b11737e2babc2c4a82e44b76a6127f4c326ffa93df",
     "note": "Storage-layout regression baseline. Regenerate ONLY for an intended, reviewed, upgrade-safe layout change via check.sh --update.",
     "schema": 2
   },
@@ -67,60 +67,60 @@
         "label": "topPosts",
         "offset": 0,
         "slot": 108,
-        "type": "t_array(t_struct(TopPost)_storage)3_storage"
+        "type": "t_array(t_struct(TopPost)_storage)10_storage"
       },
       {
         "label": "_reentrancyStatus",
         "offset": 0,
-        "slot": 114,
+        "slot": 128,
         "type": "t_uint256"
       },
       {
         "label": "sMaxLastUpdatedEpoch",
         "offset": 0,
-        "slot": 115,
+        "slot": 129,
         "type": "t_uint256"
       },
       {
         "label": "snapshotPeriod",
         "offset": 0,
-        "slot": 116,
+        "slot": 130,
         "type": "t_uint256"
       },
       {
         "label": "sMaxDecayRateRay",
         "offset": 0,
-        "slot": 117,
+        "slot": 131,
         "type": "t_uint256"
       },
       {
         "label": "sMaxDecayMaxEpochs",
         "offset": 0,
-        "slot": 118,
+        "slot": 132,
         "type": "t_uint256"
       },
       {
         "label": "guardian",
         "offset": 0,
-        "slot": 119,
+        "slot": 133,
         "type": "t_address"
       },
       {
         "label": "paused",
         "offset": 20,
-        "slot": 119,
+        "slot": 133,
         "type": "t_bool"
       },
       {
         "label": "_initializedV2",
         "offset": 21,
-        "slot": 119,
+        "slot": 133,
         "type": "t_bool"
       },
       {
         "label": "__gap",
         "offset": 0,
-        "slot": 120,
+        "slot": 134,
         "type": "t_array(t_uint256)499_storage"
       }
     ],
@@ -144,10 +144,10 @@
         "encoding": "dynamic_array",
         "numberOfBytes": "32"
       },
-      "t_array(t_struct(TopPost)_storage)3_storage": {
+      "t_array(t_struct(TopPost)_storage)10_storage": {
         "base": "t_struct(TopPost)_storage",
         "encoding": "inplace",
-        "numberOfBytes": "192"
+        "numberOfBytes": "640"
       },
       "t_array(t_uint256)100_storage": {
         "base": "t_uint256",
@@ -303,15 +303,9 @@
             "offset": 0,
             "slot": 3,
             "type": "t_uint256"
-          },
-          {
-            "label": "entryEpoch",
-            "offset": 0,
-            "slot": 4,
-            "type": "t_uint256"
           }
         ],
-        "numberOfBytes": "160"
+        "numberOfBytes": "128"
       },
       "t_struct(TopPost)_storage": {
         "encoding": "inplace",

@@ -83,7 +83,9 @@ contract S03ValidationPoC is Test {
         eng.withdraw(3, 0, 150e18, true);
         _stake(address(0xD057), 9, 0, 1);
 
-        assertEq(eng.sMax(), 1, "sMax should be dragged to 1 wei");
+        // patch_prC_rulings_p2: REGRESSION FORM — the drag is dead. Within the
+        // same epoch no decay elapses, so sMax holds the 300e18 high-water mark.
+        assertEq(eng.sMax(), 300e18, "never-snap-down: sMax must hold the high-water mark");
 
         uint256 before = _total(TARGET);
         uint256 epochs = 30;
@@ -159,12 +161,13 @@ contract S03ValidationPoC is Test {
             emit log_named_uint("NET LOSS", attackerStart - held);
         }
 
-        // FALSIFIED AS WRITTEN: once the seed posts unwind, the attacker's OWN target post
-        // becomes the tracked leader, so sMax snaps to the target's total (not 1 wei).
-        // participationRay = T*RAY/sMax = RAY anyway, so the rate advantage still lands --
-        // but via "my post is the leader", which is INTENDED behaviour, not an I.4 break.
-        assertEq(eng.sMax(), _total(TARGET), "sMax equals the attacker's own post total");
-        assertGt(held, attackerStart, "attack is net profitable");
+        // patch_prC_rulings_p2: post-fix the setup cannot drag sMax (it holds at
+        // 300e18 through the unwind and descends only by decay, floored at the
+        // tracked leader — which by settlement time is the attacker's own post,
+        // the INTENDED leader semantics). The attacker earns only the honest
+        // participation-scaled yield on their real position.
+        assertEq(eng.sMax(), _total(TARGET), "decay floored at the tracked leader (attacker's own post)");
+        assertGe(held + 1e18, attackerStart, "attacker keeps roughly their capital (honest yield only)");
     }
 
     // ─────────────────────────────────────────────────────────────

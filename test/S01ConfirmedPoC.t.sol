@@ -103,7 +103,10 @@ contract S01ConfirmedPoC is Test {
             emit log_named_uint("FINAL DEFICIT", s2 + c2 - balFinal);
         }
 
-        // Assert insolvency
-        assertTrue(s1 + c1 > balAfter || s2 + c2 > balFinal, "S-01 CONFIRMED: insolvency");
+        // patch_prC_rulings_p2: REGRESSION FORM. The honest bucket-index init
+        // + 1-wei settlement floor make the 0->RAY resurrection impossible, so
+        // the engine must remain solvent at every checkpoint of this scenario.
+        assertGe(balAfter, s1 + c1, "S-01 regression: insolvent after first settlement");
+        assertGe(balFinal, s2 + c2, "S-01 regression: insolvent after victim exit");
     }
 }

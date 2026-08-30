@@ -179,7 +179,7 @@ contract StakeEngineFuzzTest is Test {
         // Weighted position is now the midpoint: cumBefore + amount/2
         // Since this is the only lot on this side, cumBefore=0, amount=amt1+amt2
         // So wPos = (amt1 + amt2) / 2
-        (uint256 amount, uint256 weightedPos,,,) = engine.getUserLotInfo(address(this), postA, 0);
+        (uint256 amount, uint256 weightedPos,,) = engine.getUserLotInfo(address(this), postA, 0);
 
         assertEq(amount, amt1 + amt2, "lot info amount wrong");
         uint256 expectedPos = (amt1 + amt2) / 2;

@@ -64,9 +64,10 @@ abstract contract GovernedUpgradeable is Initializable, UUPSUpgradeable, ERC2771
         if (_msgSender() != pendingGovernance) {
             revert NotPendingGovernance();
         }
-        if (pendingGovernance == address(0)) {
-            revert ZeroAddress();
-        }
+        // patch_prC_rulings S-13: the old ZeroAddress branch here was
+        // unreachable — when pendingGovernance is address(0), no real caller
+        // can equal it, so the NotPendingGovernance check above always fires
+        // first. Removed as dead code; behavior is identical.
         governance = pendingGovernance;
         pendingGovernance = address(0);
         emit GovernanceSet(governance);

@@ -150,7 +150,7 @@ contract RowYInvariantsPoC is Test {
             eng.updatePost(1);
             (uint256 sideTotal,) = eng.getPostTotals(1);
             for (uint256 i = 0; i < 12; i++) {
-                (uint256 amt, uint256 wPos,,,) = eng.getUserLotInfo(address(uint160(0x7000 + i)), 1, 0);
+                (uint256 amt, uint256 wPos,,) = eng.getUserLotInfo(address(uint160(0x7000 + i)), 1, 0);
                 if (amt == 0) {
                     continue;
                 }

@@ -62,7 +62,7 @@ contract S02FixOrphanCheckPoC is Test {
         // restake: with the fix this must NOT revive at the old index
         _stake(attacker, 0, 500e18);
 
-        (uint256 amt, uint256 wPos,,,) = eng.getUserLotInfo(attacker, POST, 0);
+        (uint256 amt, uint256 wPos,,) = eng.getUserLotInfo(attacker, POST, 0);
         emit log_named_uint("attacker lot amount", amt);
         emit log_named_uint("attacker wPos", wPos);
         emit log_named_uint("attacker getUserStake", eng.getUserStake(attacker, POST, 0));

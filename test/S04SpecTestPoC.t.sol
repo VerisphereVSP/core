@@ -124,10 +124,34 @@ contract S04SpecTestPoC is Test {
             emit log_named_uint("no residual suppression; excess", afterExitGrowth - cleanGrowth);
         }
 
-        // RESULT: NO residual suppression. sMax snapped straight back from 1e24 to the
-        // victim's own total (100e18) the moment the whale exited, and the victim's growth is
-        // byte-identical to the never-whaled baseline. The spec's safety statement on lines
-        // 62-63 HOLDS. Recorded as the passing assertion so the suite documents the negative.
-        assertEq(afterExitGrowth, cleanGrowth, "spec holds: exited whale leaves no residual suppression");
+        // patch_prC_rulings_p2: CHANGED INTENDED BEHAVIOR under S-03 never-snap-down.
+        // Pre-PR-C, sMax snapped from the whale's 1e24 peak straight back to the
+        // victim's total on exit — which is exactly the mechanism a dust post
+        // abused in the other direction. Now the peak persists and DECAYS (10%/
+        // epoch, floored at the tracked leader), so an exited whale leaves a
+        // BOUNDED, TRANSIENT suppression that anyone can burn down by poking
+        // refreshSMax each epoch. Assert the full arc: suppression exists,
+        // decay+poke clears it, and the recovered rate matches the clean rate.
+        assertLt(afterExitGrowth, cleanGrowth, "transient suppression expected under never-snap-down");
+
+        // burn the peak down: three 30-epoch decay windows (capped per call).
+        for (uint256 k = 0; k < 3; k++) {
+            // vm.getBlockTimestamp: in-frame block.timestamp reads are cached by
+            // the solc 0.8.33 optimizer after first use, so relative warp chains
+            // collapse; the cheatcode reads the true env value (fresh frame).
+            vm.warp(vm.getBlockTimestamp() + 30 days);
+            eng.refreshSMax(VICTIM);
+        }
+        assertEq(eng.sMax(), _total(VICTIM), "decay floors at the victim once the peak burns off");
+
+        uint256 b2 = _total(VICTIM);
+        vm.warp(vm.getBlockTimestamp() + 30 days);
+        eng.updatePost(VICTIM);
+        uint256 recoveredGrowth = _total(VICTIM) - b2;
+        emit log_named_uint("victim growth after peak burned off", recoveredGrowth);
+        // rate (growth/base) recovers to the clean rate within 2%
+        assertApproxEqRel(
+            recoveredGrowth * 1e18 / b2, cleanGrowth * 1e18 / b0, 2e16, "post-decay rate matches the never-whaled rate"
+        );
     }
 }

@@ -175,7 +175,10 @@ contract S03SMaxTrackerPoC is Test {
             emit log_named_uint("I.4 VIOLATED shortfall", leaderNow - sMaxNow);
             emit log_named_uint("raw T/sMax ratio (would clamp to RAY)", leaderNow / sMaxNow);
         }
-        assertLt(sMaxNow, leaderNow, "S-03(b): sMax dragged below true leader by a dust post");
+        // patch_prC_rulings_p2: REGRESSION FORM — never-snap-down. The dust
+        // post cannot drag sMax; it holds at the high-water mark and only
+        // decay (floored at the tracked leader) brings it down.
+        assertGe(sMaxNow, leaderNow, "S-03(b) regression: dust post dragged sMax below leader");
     }
 
     /// Path (a): decay below the true leader.
@@ -206,7 +209,13 @@ contract S03SMaxTrackerPoC is Test {
         if (sMaxNow < leaderNow) {
             emit log_named_uint("I.4 VIOLATED shortfall", leaderNow - sMaxNow);
         }
-        assertLt(sMaxNow, leaderNow, "S-03(a): sMax decayed below true leader");
+        // patch_prC_rulings_p2: pre-poke, the deviation is real — the tracker
+        // cannot floor at a post it has never been shown. That gap is the
+        // documented residue of lazy accrual, and I.4's guarantee is that it is
+        // closeable by ANYONE:
+        emit log_named_uint("pre-poke sMax (deviation expected)", sMaxNow);
+        eng.refreshSMax(4);
+        assertGe(eng.sMax(), _postTotal(4), "S-03(a) regression: permissionless poke failed to restore I.4");
     }
 
     /// SEVERITY: does the I.4 violation actually cause over-minting?

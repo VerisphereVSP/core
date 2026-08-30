@@ -107,6 +107,8 @@ contract S01BucketMajorityPoC is Test {
             emit log_named_uint("DEFICIT 2nd", s2 + c2 - balAfter2);
         }
 
-        assertGt(s2 + c2, balAfter2, "S-01: insolvency after sentinel read-back");
+        // patch_prC_rulings_p2: REGRESSION FORM — no sentinel to read back;
+        // a wiped bucket floors at index 1 (dust) instead of resurrecting.
+        assertLe(s2 + c2, balAfter2, "S-01 regression: claims exceed balance after 2nd settle");
     }
 }
