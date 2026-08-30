@@ -145,6 +145,14 @@ contract Deploy is Script {
             address(stakeImpl), abi.encodeCall(StakeEngine.initialize, (gov, address(token), address(protocolPolicy)))
         );
         StakeEngine stake = StakeEngine(address(stakeProxy));
+        // patch_prC_rulings S-09: the decay backstop is 10%/day (9e17) BY DESIGN;
+        // the old docstring claiming 0.5%/day was the bug. Set it explicitly when
+        // the deployer holds governance (dev path), and pin it unconditionally so
+        // any drift fails the deploy loudly on every path.
+        if (stake.governance() == deployer) {
+            stake.setSMaxDecayRate(9e17);
+        }
+        require(stake.sMaxDecayRateRay() == 9e17, "Deploy: sMaxDecayRateRay != 9e17 (10%/day, S-09)");
         // patch_stakeengine_exempt_precompute: fail loud if the nonce offset above ever drifts,
         // rather than silently deploying VSPToken with a wrong exemption target.
         require(

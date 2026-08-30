@@ -114,7 +114,7 @@ contract S06HeapDesyncPoC is Test {
                     // a duplicate. Observable proxy: does the member still behave
                     // correctly, and does promotion still work?
                     _stake(victim, POST, 0, 20e18); // > smallest ranked -> should promote
-                    (uint256 amt2,,,,) = eng.getUserLotInfo(victim, POST, 0);
+                    (uint256 amt2,,,) = eng.getUserLotInfo(victim, POST, 0);
                     emit log_named_uint("  after restake, ranked amount (0 = still bucket)", amt2);
                     emit log_named_uint("  after restake, getUserStake", eng.getUserStake(victim, POST, 0));
                 }

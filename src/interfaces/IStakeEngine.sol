@@ -23,14 +23,12 @@ interface IStakeEngine {
     function setSMaxDecayRate(uint256 newRate) external;
     function setSMaxDecayMaxEpochs(uint256 newMax) external;
     /// @notice Returns lot info for a user's position.
+    /// @dev patch_prC_rulings S-11: entryEpoch dropped from the tuple.
     function getUserLotInfo(address user, uint256 postId, uint8 side)
         external
         view
-        returns (
-            uint256 amount,
-            uint256 weightedPosition,
-            uint256 entryEpoch,
-            uint256 sideTotal,
-            uint256 positionWeight
-        );
+        returns (uint256 amount, uint256 weightedPosition, uint256 sideTotal, uint256 positionWeight);
+
+    /// @notice patch_prC_rulings S-03: permissionless sMax poke.
+    function refreshSMax(uint256 postId) external;
 }

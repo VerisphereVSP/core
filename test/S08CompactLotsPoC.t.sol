@@ -69,11 +69,11 @@ contract S08CompactLotsPoC is Test {
         vm.prank(ghost);
         eng.withdraw(POST, 0, 100e18, true);
 
-        (, uint256 pA,,,) = eng.getUserLotInfo(a, POST, 0);
-        (, uint256 pB,,,) = eng.getUserLotInfo(b, POST, 0);
-        (, uint256 pC,,,) = eng.getUserLotInfo(c, POST, 0);
-        (, uint256 pD,,,) = eng.getUserLotInfo(d, POST, 0);
-        (, uint256 pE,,,) = eng.getUserLotInfo(e, POST, 0);
+        (, uint256 pA,,) = eng.getUserLotInfo(a, POST, 0);
+        (, uint256 pB,,) = eng.getUserLotInfo(b, POST, 0);
+        (, uint256 pC,,) = eng.getUserLotInfo(c, POST, 0);
+        (, uint256 pD,,) = eng.getUserLotInfo(d, POST, 0);
+        (, uint256 pE,,) = eng.getUserLotInfo(e, POST, 0);
 
         emit log("--- positions BEFORE compactLots (arrival order) ---");
         emit log_named_uint("A", pA);
@@ -86,11 +86,11 @@ contract S08CompactLotsPoC is Test {
         // governance compacts
         eng.compactLots(POST, 0);
 
-        (, uint256 qA,,,) = eng.getUserLotInfo(a, POST, 0);
-        (, uint256 qB,,,) = eng.getUserLotInfo(b, POST, 0);
-        (, uint256 qC,,,) = eng.getUserLotInfo(c, POST, 0);
-        (, uint256 qD,,,) = eng.getUserLotInfo(d, POST, 0);
-        (, uint256 qE,,,) = eng.getUserLotInfo(e, POST, 0);
+        (, uint256 qA,,) = eng.getUserLotInfo(a, POST, 0);
+        (, uint256 qB,,) = eng.getUserLotInfo(b, POST, 0);
+        (, uint256 qC,,) = eng.getUserLotInfo(c, POST, 0);
+        (, uint256 qD,,) = eng.getUserLotInfo(d, POST, 0);
+        (, uint256 qE,,) = eng.getUserLotInfo(e, POST, 0);
 
         emit log("--- positions AFTER compactLots ---");
         emit log_named_uint("A", qA);

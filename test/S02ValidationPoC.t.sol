@@ -81,8 +81,8 @@ contract S02ValidationPoC is Test {
         vm.prank(attacker);
         eng.stake(POST, 0, BIG);
 
-        (, aPos,,,) = eng.getUserLotInfo(attacker, POST, 0);
-        (, hPos,,,) = eng.getUserLotInfo(h0, POST, 0);
+        (, aPos,,) = eng.getUserLotInfo(attacker, POST, 0);
+        (, hPos,,) = eng.getUserLotInfo(h0, POST, 0);
 
         // make support win so the aligned branch mints
         address chal = address(0xBEEF);

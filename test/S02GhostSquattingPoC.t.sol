@@ -83,8 +83,8 @@ contract S02GhostSquattingPoC is Test {
         eng.stake(POST, 0, big);
 
         // --- Positions: lower weightedPosition == earlier in queue == higher rate.
-        (uint256 aAmt, uint256 aPos,,, uint256 aWeight) = eng.getUserLotInfo(attacker, POST, 0);
-        (uint256 cAmt, uint256 cPos,,, uint256 cWeight) = eng.getUserLotInfo(control, POST, 0);
+        (uint256 aAmt, uint256 aPos,, uint256 aWeight) = eng.getUserLotInfo(attacker, POST, 0);
+        (uint256 cAmt, uint256 cPos,, uint256 cWeight) = eng.getUserLotInfo(control, POST, 0);
 
         emit log_named_uint("attacker amount", aAmt);
         emit log_named_uint("control  amount", cAmt);

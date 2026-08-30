@@ -87,7 +87,7 @@ contract S06GapBucketAddPoC is Test {
             emit log_named_uint("after 2nd 1-wei stake", eng.getUserStake(dust, POST, 0));
             // and a larger add, which should promote them
             _stake(dust, 0, 30e18);
-            (uint256 amt2,,,,) = eng.getUserLotInfo(dust, POST, 0);
+            (uint256 amt2,,,) = eng.getUserLotInfo(dust, POST, 0);
             emit log_named_uint("after 30e18 stake, ranked amount (0 = still bucket)", amt2);
             emit log_named_uint("after 30e18 stake, getUserStake", eng.getUserStake(dust, POST, 0));
         } else {

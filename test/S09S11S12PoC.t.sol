@@ -53,7 +53,7 @@ contract S09S11S12PoC is Test {
         _fresh();
         uint256 live = eng.sMaxDecayRateRay();
         emit log_named_uint("live sMaxDecayRateRay after initialize", live);
-        emit log_named_uint("docstring claims", 995e15);
+        emit log_named_uint("old (pre-fix) docstring claimed", 995e15); // patch_prC_rulings_p2: docstring now matches the constant
         emit log_named_uint("constant DEFAULT_SMAX_DECAY_RATE_RAY", 9e17);
 
         // Quantify the difference the doc error would cause over 10 epochs.
@@ -69,25 +69,24 @@ contract S09S11S12PoC is Test {
         assertEq(live, 9e17, "S-09: live default is the 9e17 constant, not the documented 995e15");
     }
 
-    /// S-11: is entryEpoch stored, and does it influence yield?
-    /// Two identical stakers on the same post, entering at DIFFERENT epochs but
-    /// both before any settlement, must earn identically if entryEpoch is unused.
-    function test_S11_EntryEpochStoredButUnused() public {
+    /// patch_prC_rulings_p2 REGRESSION FORM (S-11): the entryEpoch field is
+    /// REMOVED — getUserLotInfo is a 4-tuple, and yield differences between
+    /// stakers arriving at different times are driven by QUEUE POSITION only,
+    /// exactly as the original PoC demonstrated.
+    function test_S11_EntryEpochRemoved_YieldByQueuePosition() public {
         _fresh();
         address early = address(0xEA21);
         address late = address(0x1A7E);
 
         _stake(early, POST, 0, 100e18);
-        (,, uint256 eEpochEarly,,) = eng.getUserLotInfo(early, POST, 0);
+        (uint256 eAmt, uint256 ePos,,) = eng.getUserLotInfo(early, POST, 0);
+        assertEq(eAmt, 100e18, "4-tuple amount sane");
 
         // advance time but do NOT settle: no opponent yet, so nothing can mint
         vm.warp(block.timestamp + 20 days);
         _stake(late, POST, 0, 100e18);
-        (,, uint256 eEpochLate,,) = eng.getUserLotInfo(late, POST, 0);
-
-        emit log_named_uint("early entryEpoch", eEpochEarly);
-        emit log_named_uint("late  entryEpoch", eEpochLate);
-        assertGt(eEpochLate, eEpochEarly, "entryEpoch IS stored and differs");
+        (, uint256 lPos,,) = eng.getUserLotInfo(late, POST, 0);
+        assertLt(ePos, lPos, "earlier staker sits ahead in the queue");
 
         // now give the post an opponent and settle once
         _stake(address(0xBEEF), POST, 1, 1);
@@ -100,7 +99,6 @@ contract S09S11S12PoC is Test {
         uint256 lGain = eng.getUserStake(late, POST, 0) - lBefore;
         emit log_named_uint("early gain", eGain);
         emit log_named_uint("late  gain", lGain);
-        emit log_named_uint("entryEpoch gap (epochs)", eEpochLate - eEpochEarly);
         emit log("if gains differ it is QUEUE POSITION, not entryEpoch");
     }
 

@@ -31,7 +31,9 @@ contract StakeEngine is GovernedUpgradeable {
         uint256 amount; // Current amount after last snapshot
         uint8 side;
         uint256 weightedPosition; // Stake-weighted queue position
-        uint256 entryEpoch; // Epoch of first stake
+        // patch_prC_rulings S-11: entryEpoch removed — stored but never read by
+        // any settlement path (see MAX_SNAPSHOT_PERIOD note below for why
+        // prorating by entry epoch was rejected as a mechanism).
     }
 
     struct SideQueue {
@@ -40,7 +42,13 @@ contract StakeEngine is GovernedUpgradeable {
         // patch_h1a_bucket: pooled tail bucket (all stakers below the ranked set,
         // sharing one position). Rebases in O(1); bucketLive = scaled * index / RAY.
         uint256 bucketScaledTotal;
-        uint256 bucketIndexRay; // 0 sentinel == RAY (lazy init)
+        // patch_prC_rulings S-01: honest init — 0 means "no member has ever
+        // entered this bucket" and nothing else. _bucketAdd sets RAY explicitly
+        // on first entry; settlement floors the index at 1 wei so a stored 0
+        // can never be produced by decay and never collides with the
+        // uninitialized state (the old 0==RAY lazy sentinel resurrected wiped
+        // buckets at face value after ~1400 days of losses at deployed rates).
+        uint256 bucketIndexRay;
         // patch_h1b_promotion: max-heap of bucket member addresses, keyed on
         // scaledShares (rebase-stable -> no settlement-time maintenance).
         address[] bucketHeap;
@@ -72,11 +80,16 @@ contract StakeEngine is GovernedUpgradeable {
     uint256 public sMax;
     uint256 public sMaxPostId;
 
+    /// @notice Leader-tracker width (patch_prC_rulings S-03 layer iii: 3 -> 10).
+    ///         Wider board narrows the untracked-dormant-post window; the
+    ///         irreducible residue is closed by permissionless refreshSMax().
+    uint256 public constant TRACKED_POSTS = 10;
+
     struct TopPost {
         uint256 postId;
         uint256 total;
     }
-    TopPost[3] private topPosts;
+    TopPost[TRACKED_POSTS] private topPosts;
 
     uint256 private constant _NOT_ENTERED = 1;
     uint256 private constant _ENTERED = 2;
@@ -93,7 +106,10 @@ contract StakeEngine is GovernedUpgradeable {
     uint256 public snapshotPeriod;
 
     /// @notice sMax decay rate per epoch, in RAY.
-    ///         Default 995e15 = 0.995 = 0.5% decay per day.
+    ///         Default 9e17 = 0.9 = 10% decay per day (patch_prC_rulings S-09:
+    ///         the constant was always 9e17 and is CORRECT as the backstop; the
+    ///         old docstring claiming 0.5%/day was the bug. Deploy.s.sol pins
+    ///         this value explicitly).
     ///         Governance-configurable. Lower value = faster decay.
     ///         RAY (1e18) = no decay. Must be in (0, RAY].
     uint256 public sMaxDecayRateRay;
@@ -120,8 +136,8 @@ contract StakeEngine is GovernedUpgradeable {
     ///         periods AND closes the mid-window accrual asymmetry.
     /// @dev patch_sec_jit_window (2026-08-19, external report VSP-SEC-001):
     ///      settlement scales the rate by `epochsElapsed` and applies the result
-    ///      to whatever lots exist at settlement time -- `StakeLot.entryEpoch` is
-    ///      stored but never read. Whenever snapshotPeriod > EPOCH_LENGTH the
+    ///      to whatever lots exist at settlement time -- no per-lot entry epoch
+    ///      participates (the field was removed as S-11). Whenever snapshotPeriod > EPOCH_LENGTH the
     ///      snapshot is SUPPRESSED mid-window, so (a) a lot joining late in the
     ///      window collects the whole window's accrual, and (b) a lot leaving
     ///      before the window closes escapes the whole window's decay.
@@ -129,9 +145,10 @@ contract StakeEngine is GovernedUpgradeable {
     ///      interaction settles every elapsed epoch BEFORE mutating the lot set
     ///      (stake() and withdraw() both call _maybeSnapshot first) -- which
     ///      closes both directions.
-    ///      Prorating by entryEpoch was the reporter's suggestion; it fixes only
-    ///      direction (a), and cannot fix it for the pooled tail bucket at all,
-    ///      since _settleBucket is an O(1) index rebase with no per-entry epochs.
+    ///      Prorating by a per-lot entry epoch was the reporter's suggestion; it
+    ///      fixes only direction (a), and cannot fix it for the pooled tail bucket
+    ///      at all, since _settleBucket is an O(1) index rebase with no per-entry
+    ///      epochs. That is also why StakeLot carries no entry-epoch field (S-11).
     uint256 public constant MAX_SNAPSHOT_PERIOD = EPOCH_LENGTH;
     /// @notice Hard cap on sMaxDecayMaxEpochs. Prevents OOG in _projectSMaxDecay.
     uint256 public constant MAX_SMAX_DECAY_EPOCHS = 10000;
@@ -181,7 +198,9 @@ contract StakeEngine is GovernedUpgradeable {
     event SMaxRescanned(uint256 newSMax, uint256 newSMaxPostId);
     event SMaxDecayRateSet(uint256 oldRate, uint256 newRate);
     event SMaxDecayMaxEpochsSet(uint256 oldMax, uint256 newMax);
-    event PositionsRescaled(uint256 indexed postId, uint8 side, uint256 oldMax, uint256 newCeiling);
+    // patch_prC_rulings S-12: PositionsRescaled event removed with _rescalePositions.
+    /// @notice patch_prC_rulings S-03: emitted by the permissionless poke.
+    event SMaxRefreshed(uint256 indexed postId, uint256 postTotal, uint256 sMaxAfter);
 
     // ------------------------------------------------------------
     // Constructor / Initializer
@@ -398,16 +417,12 @@ contract StakeEngine is GovernedUpgradeable {
         return _projectLotValue(ps, lot, currentEpoch);
     }
 
+    /// @dev patch_prC_rulings S-11: entryEpoch dropped from the tuple (field removed).
+    // patch_prC_rulings_p2 (arity sweep applied)
     function getUserLotInfo(address user, uint256 postId, uint8 side)
         external
         view
-        returns (
-            uint256 amount,
-            uint256 weightedPosition,
-            uint256 entryEpoch,
-            uint256 sideTotal,
-            uint256 positionWeight
-        )
+        returns (uint256 amount, uint256 weightedPosition, uint256 sideTotal, uint256 positionWeight)
     {
         if (side > 1) {
             revert InvalidSide();
@@ -415,11 +430,11 @@ contract StakeEngine is GovernedUpgradeable {
         PostState storage ps = posts[postId];
         uint256 idx = _getLotIndex(ps, user, side);
         if (idx == 0) {
-            return (0, 0, 0, 0, 0);
+            return (0, 0, 0, 0);
         }
         StakeLot storage lot = ps.sides[side].lots[idx - 1];
         if (lot.amount == 0) {
-            return (0, 0, 0, 0, 0);
+            return (0, 0, 0, 0);
         }
 
         uint256 currentEpoch = _currentEpoch();
@@ -439,7 +454,7 @@ contract StakeEngine is GovernedUpgradeable {
         } else {
             positionWeight = RAY;
         }
-        return (projectedAmount, lot.weightedPosition, lot.entryEpoch, sideTotal, positionWeight);
+        return (projectedAmount, lot.weightedPosition, sideTotal, positionWeight);
     }
 
     // ------------------------------------------------------------
@@ -630,10 +645,11 @@ contract StakeEngine is GovernedUpgradeable {
 
         int256 vsNum = int256(2 * A) - int256(T);
         if (vsNum == 0) {
-            // VS neutral — no growth/decay, but still rescale positions
-            // so the invariant holds for the next epoch.
-            _rescalePositions(postId, 0, qs);
-            _rescalePositions(postId, 1, qc);
+            // VS neutral — no growth/decay. patch_prC_rulings S-12: the old
+            // _rescalePositions call here was dead in effect — positions are
+            // recomputed as midpoints (< total) after every queue mutation and
+            // every settlement, so its rescale body never executed; the
+            // clamp inside _applyEpoch remains the safety net regardless.
             ps.lastSnapshotEpoch = currentEpoch;
             return;
         }
@@ -643,6 +659,9 @@ contract StakeEngine is GovernedUpgradeable {
 
         uint256 epochsElapsed = currentEpoch - lastEpoch;
         uint256 vRay = (absVS * RAY) / T;
+        // patch_prC_rulings S-04 (ratified): participation deliberately couples
+        // every post's rate to the GLOBAL leader via sMax — smaller posts earn a
+        // scaled-down rate by design; this is the intended cross-post coupling.
         uint256 participationRay = (T * RAY) / sMax;
         if (participationRay > RAY) {
             participationRay = RAY;
@@ -653,8 +672,9 @@ contract StakeEngine is GovernedUpgradeable {
         uint256 rBase = rMin + ((rMax - rMin) * vRay * participationRay) / (RAY * RAY);
 
         // Apply epoch gains/losses (positions that exceed sideTotal are
-        // safely clamped to zero weight inside _applyEpoch — this is
-        // the one-epoch penalty before rescale fixes them).
+        // safely clamped to zero weight inside _applyEpoch; midpoint
+        // recomputation after every mutation keeps positions < total, so the
+        // clamp is a safety net rather than a working path — S-12).
         (uint256 mintS, uint256 burnS) = _applyEpoch(qs, supportWins, true, rBase);
         (uint256 mintC, uint256 burnC) = _applyEpoch(qc, supportWins, false, rBase);
 
@@ -681,46 +701,10 @@ contract StakeEngine is GovernedUpgradeable {
         emit PostUpdated(postId, currentEpoch, qs.total, qc.total);
     }
 
-    /// @dev Rescale weightedPositions so that max(position) < q.total.
-    ///      Called after _applyEpoch + _recomputeSideTotal so that totals
-    ///      reflect the final state including mints/burns.
-    ///      Uses strict < (not <=) by targeting q.total - 1 when rescale
-    ///      is needed, so no lot starts the next epoch at posWeight == 0.
-    function _rescalePositions(uint256 postId, uint8 side, SideQueue storage q) internal {
-        uint256 n = q.lots.length;
-        if (n == 0 || q.total == 0) {
-            return;
-        }
-
-        uint256 maxPos = 0;
-        for (uint256 i = 0; i < n; i++) {
-            uint256 p = q.lots[i].weightedPosition;
-            if (p > maxPos) {
-                maxPos = p;
-            }
-        }
-        // Rescale if any position >= q.total (using >= not > so that
-        // a position exactly equal to sideTotal is also fixed).
-        if (maxPos < q.total) {
-            return;
-        }
-
-        // Target: map maxPos to (q.total - 1) so that the highest
-        // position always has posShare < RAY → posWeight > 0.
-        uint256 target = q.total > 0 ? q.total - 1 : 0;
-        if (target == 0) {
-            // Edge case: sideTotal is 1 wei. Just zero all positions.
-            for (uint256 i = 0; i < n; i++) {
-                q.lots[i].weightedPosition = 0;
-            }
-        } else {
-            for (uint256 i = 0; i < n; i++) {
-                q.lots[i].weightedPosition = (q.lots[i].weightedPosition * target) / maxPos;
-            }
-        }
-        emit PositionsRescaled(postId, side, maxPos, target);
-    }
-
+    // patch_prC_rulings S-12: _rescalePositions removed (dead code). Positions
+    // are recomputed as midpoints (< q.total) after every queue mutation and
+    // settlement, so the rescale condition never fired outside the neutral
+    // branch, where it was a no-op. The _applyEpoch clamp is the safety net.
     /// @dev Applies epoch gains/losses with midpoint positional weighting.
     ///      Each lot's delta = amount * rBase * (T - wPos) / T.
     ///      No redistribution: unminted rate is simply not created.
@@ -933,7 +917,7 @@ contract StakeEngine is GovernedUpgradeable {
 
     function _updateSMax(uint256 postId, uint256 postTotal) internal {
         uint256 slot = type(uint256).max;
-        for (uint256 i = 0; i < 3; i++) {
+        for (uint256 i = 0; i < TRACKED_POSTS; i++) {
             if (topPosts[i].postId == postId && topPosts[i].total > 0) {
                 slot = i;
                 break;
@@ -947,16 +931,16 @@ contract StakeEngine is GovernedUpgradeable {
                 topPosts[slot - 1] = tmp;
                 slot--;
             }
-            while (slot < 2 && topPosts[slot].total < topPosts[slot + 1].total) {
+            while (slot < TRACKED_POSTS - 1 && topPosts[slot].total < topPosts[slot + 1].total) {
                 TopPost memory tmp = topPosts[slot];
                 topPosts[slot] = topPosts[slot + 1];
                 topPosts[slot + 1] = tmp;
                 slot++;
             }
         } else {
-            for (uint256 i = 0; i < 3; i++) {
+            for (uint256 i = 0; i < TRACKED_POSTS; i++) {
                 if (postTotal > topPosts[i].total) {
-                    for (uint256 j = 2; j > i; j--) {
+                    for (uint256 j = TRACKED_POSTS - 1; j > i; j--) {
                         topPosts[j] = topPosts[j - 1];
                     }
                     topPosts[i] = TopPost(postId, postTotal);
@@ -964,7 +948,7 @@ contract StakeEngine is GovernedUpgradeable {
                 }
             }
         }
-        for (uint256 i = 0; i < 3; i++) {
+        for (uint256 i = 0; i < TRACKED_POSTS; i++) {
             if (topPosts[i].total == 0) {
                 topPosts[i] = TopPost(0, 0);
             }
@@ -976,15 +960,35 @@ contract StakeEngine is GovernedUpgradeable {
                 sMax = leaderTotal;
                 sMaxLastUpdatedEpoch = currentEpoch;
             } else {
-                // Snap down to current leader immediately.
-                // Decay is only a fallback for stale topPosts array.
-                sMax = leaderTotal;
-                sMaxLastUpdatedEpoch = currentEpoch;
+                // patch_prC_rulings S-03 layer (i): NEVER snap down. Decay is
+                // the sole descent, floored at the tracked leader. The old
+                // immediate snap-down let a 1-wei dust post drag sMax to dust
+                // the instant the tracked leaders unwound, inflating every
+                // other post's participation factor to the clamp.
+                uint256 decayed = _applySMaxDecay(currentEpoch);
+                if (decayed < leaderTotal) {
+                    sMax = leaderTotal;
+                }
             }
             sMaxPostId = topPosts[0].postId;
         } else {
             sMax = _applySMaxDecay(currentEpoch);
         }
+    }
+
+    /// @notice patch_prC_rulings S-03 layer (ii): the irreducible "poke" for
+    ///         lazy-accrual dormant posts. Permissionless: it can only feed the
+    ///         tracker a post's TRUE stored total (settling first if an epoch
+    ///         boundary has passed), so the worst any caller can do is make
+    ///         sMax more honest. The ops worker calls this each epoch for the
+    ///         largest known posts; anyone else can close a deviation the
+    ///         moment they see one (I.4 restoration is permissionless).
+    function refreshSMax(uint256 postId) external nonReentrant {
+        _maybeSnapshot(postId, _currentEpoch());
+        PostState storage ps = posts[postId];
+        uint256 total = ps.sides[0].total + ps.sides[1].total;
+        _updateSMax(postId, total);
+        emit SMaxRefreshed(postId, total, sMax);
     }
 
     function _applySMaxDecay(uint256 currentEpoch) internal returns (uint256) {
@@ -1009,7 +1013,7 @@ contract StakeEngine is GovernedUpgradeable {
     }
 
     function rescanSMax(uint256[] calldata postIds) external onlyGovernance {
-        for (uint256 i = 0; i < 3; i++) {
+        for (uint256 i = 0; i < TRACKED_POSTS; i++) {
             topPosts[i] = TopPost(0, 0);
         }
         for (uint256 i = 0; i < postIds.length; i++) {
@@ -1024,6 +1028,8 @@ contract StakeEngine is GovernedUpgradeable {
         emit SMaxRescanned(topPosts[0].total, topPosts[0].postId);
     }
 
+    /// @dev Returns the top 3 of the TRACKED_POSTS-slot tracker (view kept at
+    ///      three pairs for ABI stability across the widening — patch_prC_rulings).
     function getTopPosts()
         external
         view
@@ -1064,9 +1070,12 @@ contract StakeEngine is GovernedUpgradeable {
     // patch_h1a_bucket: pooled tail-bucket + unified position helpers
     // ===================================================================
 
+    /// @dev patch_prC_rulings S-01: returns the stored index verbatim. 0 now
+    ///      means only "never initialized" (empty bucket, zero scaled shares);
+    ///      _bucketAdd writes RAY explicitly on first entry and _settleBucket
+    ///      floors at 1, so a member-bearing bucket can never store 0.
     function _bucketIndex(SideQueue storage q) internal view returns (uint256) {
-        uint256 ix = q.bucketIndexRay;
-        return ix == 0 ? RAY : ix;
+        return q.bucketIndexRay;
     }
 
     function _bucketLive(SideQueue storage q) internal view returns (uint256) {
@@ -1112,6 +1121,13 @@ contract StakeEngine is GovernedUpgradeable {
 
     /// @dev Add `amount` to a (new or existing) bucket member. O(1).
     function _bucketAdd(PostState storage ps, SideQueue storage q, uint8 side, address user, uint256 amount) internal {
+        // patch_prC_rulings S-01: honest init. Index 0 <=> no member has ever
+        // entered (settlement floors at 1, so decay cannot write 0), and with
+        // no members there are no shares to revalue — initializing to RAY here
+        // is therefore always safe and never resurrects wiped value.
+        if (q.bucketIndexRay == 0) {
+            q.bucketIndexRay = RAY;
+        }
         uint256 prev = _getBucketShares(ps, user, side);
         uint256 shares = (amount * RAY) / _bucketIndex(q);
         q.bucketScaledTotal += shares;
@@ -1157,10 +1173,7 @@ contract StakeEngine is GovernedUpgradeable {
     function _pushRankedLot(PostState storage ps, SideQueue storage q, uint8 side, address user, uint256 amount)
         internal
     {
-        q.lots
-            .push(
-                StakeLot({staker: user, amount: amount, side: side, weightedPosition: 0, entryEpoch: _currentEpoch()})
-            );
+        q.lots.push(StakeLot({staker: user, amount: amount, side: side, weightedPosition: 0}));
         _setLotIndex(ps, user, side, q.lots.length);
     }
 
@@ -1281,14 +1294,30 @@ contract StakeEngine is GovernedUpgradeable {
         uint256 wPosB = rankedTotal + live / 2;
         uint256 behind = wPosB < T ? T - wPosB : 0;
         // Ray-math ordering: single multiply-first truncation, mirroring the
-        // ranked-lot delta = amount*rBase*midpointRate/(RAY*RAY). behind<=T and
-        // rBase<=rMax<RAY, so gRay<=rBase<RAY (the former >RAY clamp was dead).
+        // ranked-lot delta = amount*rBase*midpointRate/(RAY*RAY). behind <= T so
+        // gRay <= rBase. patch_prC_rulings S-05: rBase is NOT bounded by RAY —
+        // rMax scales with epochsElapsed (annualized rate x elapsed window), so
+        // under dormancy rBase can exceed RAY (proven at deploy rates from ~530
+        // elapsed epochs, and far sooner at the 5e18 policy cap). The gRay>=RAY
+        // wipe branch below is therefore LIVE, not dead: it floors a losing
+        // bucket at total loss, which is the correct bound.
         uint256 gRay = (rBase * behind) / T;
+        // patch_prC_rulings S-01/V.8: project through the INDEX with the same
+        // operations and floor as _settleBucket, so view == materialized to the
+        // wei even in the wipe/floor regime (the old live-based formula had a
+        // different truncation order).
+        uint256 ix = _bucketIndex(q);
+        uint256 newIx;
         if (aligned) {
-            return (live * (RAY + gRay)) / RAY;
+            newIx = (ix * (RAY + gRay)) / RAY;
+        } else {
+            uint256 factor = gRay >= RAY ? 0 : RAY - gRay;
+            newIx = (ix * factor) / RAY;
         }
-        uint256 factor = gRay >= RAY ? 0 : RAY - gRay;
-        return (live * factor) / RAY;
+        if (newIx == 0) {
+            newIx = 1;
+        }
+        return (q.bucketScaledTotal * newIx) / RAY;
     }
 
     /// @dev Settle the bucket in place (one epoch) via a single index rebase.
@@ -1309,8 +1338,13 @@ contract StakeEngine is GovernedUpgradeable {
         uint256 wPosB = rankedTotal + live / 2;
         uint256 behind = wPosB < T ? T - wPosB : 0;
         // Ray-math ordering: single multiply-first truncation, mirroring the
-        // ranked-lot delta = amount*rBase*midpointRate/(RAY*RAY). behind<=T and
-        // rBase<=rMax<RAY, so gRay<=rBase<RAY (the former >RAY clamp was dead).
+        // ranked-lot delta = amount*rBase*midpointRate/(RAY*RAY). behind <= T so
+        // gRay <= rBase. patch_prC_rulings S-05: rBase is NOT bounded by RAY —
+        // rMax scales with epochsElapsed (annualized rate x elapsed window), so
+        // under dormancy rBase can exceed RAY (proven at deploy rates from ~530
+        // elapsed epochs, and far sooner at the 5e18 policy cap). The gRay>=RAY
+        // wipe branch below is therefore LIVE, not dead: it floors a losing
+        // bucket at total loss, which is the correct bound.
         uint256 gRay = (rBase * behind) / T;
         uint256 ix = _bucketIndex(q);
         uint256 newIx;
@@ -1319,6 +1353,13 @@ contract StakeEngine is GovernedUpgradeable {
         } else {
             uint256 factor = gRay >= RAY ? 0 : RAY - gRay;
             newIx = (ix * factor) / RAY;
+        }
+        // patch_prC_rulings S-01: floor at 1 wei. A fully-wiped bucket is
+        // dust-dead (live ~ scaled/RAY), exits still work (full-exit branch,
+        // no division hazard), and the stored value can never collide with
+        // the 0 == uninitialized state — the root cause of the resurrection.
+        if (newIx == 0) {
+            newIx = 1;
         }
         q.bucketIndexRay = newIx;
         uint256 newLive = (q.bucketScaledTotal * newIx) / RAY;
