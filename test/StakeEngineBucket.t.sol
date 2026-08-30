@@ -124,8 +124,21 @@ contract StakeEngineBucketTest is Test {
             eng.updatePost(POST);
         }
         (uint256 s0, uint256 c0) = eng.getPostTotals(POST);
-        // engine must hold at least the winning-side claimable it minted toward
-        assertGe(vsp.balanceOf(address(eng)), 0);
+        // patch_prD_invariant_warp: the previous assertGe(balance, 0) was
+        // vacuous (uint >= 0 always holds). Real solvency: state is settled
+        // (updatePost ran at this timestamp, so totals are stored, not
+        // projected) and the engine must hold every wei of post totals AND
+        // every wei of per-staker claimable value.
+        assertGe(vsp.balanceOf(address(eng)), s0 + c0, "engine insolvent: balance < settled post totals");
+        uint256 claimable;
+        for (uint256 i = 0; i < 100; i++) {
+            claimable += eng.getUserStake(address(uint160(0x4000 + i)), POST, 0);
+        }
+        for (uint256 i = 0; i < 50; i++) {
+            claimable += eng.getUserStake(address(uint160(0x5000 + i)), POST, 0);
+        }
+        claimable += eng.getUserStake(address(0x6001), POST, 1);
+        assertGe(vsp.balanceOf(address(eng)), claimable, "engine insolvent: balance < sum of claimables");
         assertGt(s0 + c0, 0, "totals collapsed");
     }
 

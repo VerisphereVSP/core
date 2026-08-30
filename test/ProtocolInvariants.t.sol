@@ -45,11 +45,21 @@ contract ProtocolHandler is Test {
     // rule so stakes are productive rather than reverting on OppositeSideStaked.
     mapping(address => mapping(uint256 => uint8)) public sidePlusOne;
 
-    // Ghost ledger of net principal flowing through the engine. With no epoch
-    // crossing (no warp action), the engine is a pure escrow, so these tie out
-    // exactly against the sum of on-chain post totals.
+    // patch_prD_invariant_warp: settlement-aware ghost ledger. hWarp settles
+    // EVERY post immediately after warping, so the invariant contract always
+    // inspects SETTLED state (getPostTotals returns stored totals, never a
+    // projection). Settlement mints/burns move post totals; ghostSettleNet
+    // captures that net, measured from the totals delta across updatePost
+    // (mint == applied gains, burn == applied losses by construction in
+    // _applyEpoch/_settleBucket). Bucket share<->index floor division can
+    // strand up to 1 wei per mutating op inside the engine (always
+    // engine-favoring), so conservation is one-sided with a dust allowance
+    // of ghostOps wei; ghostWithdrawn records the ACTUAL engine outflow
+    // (balance delta), not the requested amount, for the same reason.
     uint256 public ghostDeposited;
     uint256 public ghostWithdrawn;
+    int256 public ghostSettleNet;
+    uint256 public ghostOps;
 
     constructor(PostRegistry _registry, StakeEngine _stakeEng, LinkGraph _graph, ScoreEngine _score, MockVSP _vsp) {
         registry = _registry;
@@ -139,6 +149,7 @@ contract ProtocolHandler is Test {
         try stakeEng.stake(post, side, amt) {
             sidePlusOne[actor][post] = side + 1;
             ghostDeposited += amt;
+            ghostOps++; // patch_prD_invariant_warp: dust bound
         } catch {}
     }
 
@@ -161,10 +172,40 @@ contract ProtocolHandler is Test {
         }
         uint256 amt = bound(amtSeed, 1, avail);
 
+        uint256 balBefore = vsp.balanceOf(address(stakeEng));
         vm.prank(actor);
         try stakeEng.withdraw(post, side, amt, false) {
-            ghostWithdrawn += amt;
+            // patch_prD_invariant_warp: the engine transfers `removed`, which
+            // under a settled bucket (bucketIndexRay != RAY) may differ from
+            // the requested amount by floor-dust. Record the ACTUAL outflow.
+            ghostWithdrawn += balBefore - vsp.balanceOf(address(stakeEng));
+            ghostOps++;
         } catch {}
+    }
+
+    /// patch_prD_invariant_warp: THE settlement action. Warps 1..7 epochs and
+    /// then force-settles every post, so invariants always run against settled
+    /// state — invariant_engineSolvent finally exercises the regime where the
+    /// S-01 class lived (bucketIndexRay rebase, epoch mint/burn, rescale).
+    /// Totals are read BEFORE the warp (state is settled at entry, so
+    /// getPostTotals is stored, not projected) and again after each
+    /// updatePost; the delta is settlement's net effect on principal.
+    function hWarp(uint256 daysSeed) public {
+        uint256 nDays = bound(daysSeed, 1, 7);
+        uint256 n = allPosts.length;
+        uint256[] memory beforeT = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            (uint256 s, uint256 c) = stakeEng.getPostTotals(allPosts[i]);
+            beforeT[i] = s + c;
+        }
+        vm.warp(block.timestamp + nDays * 1 days);
+        for (uint256 i = 0; i < n; i++) {
+            try stakeEng.updatePost(allPosts[i]) {} catch {}
+        }
+        for (uint256 i = 0; i < n; i++) {
+            (uint256 s, uint256 c) = stakeEng.getPostTotals(allPosts[i]);
+            ghostSettleNet += int256(s + c) - int256(beforeT[i]);
+        }
     }
 }
 
@@ -174,12 +215,14 @@ contract ProtocolHandler is Test {
 ///         and safety guarantees:
 ///   INV-1 Solvency: the StakeEngine always holds at least the sum of all
 ///         recorded positions, so it can always pay out.
-///   INV-2 Conservation: the sum of all on-chain post totals equals net
-///         principal (deposited - withdrawn) tracked by the handler ledger.
-///         Holds EXACTLY because this suite stays in the materialized regime:
-///         it has no warp action, so no epoch settlement / mint / burn fires
-///         and the engine behaves as a pure escrow. (The settlement / decay /
-///         projection path is covered by StakeEngineFuzz + StakeEngineRescale.)
+///   INV-2 Conservation (patch_prD_invariant_warp): post totals equal net
+///         principal (deposited - actual-withdrawn) plus settlement's net
+///         mint/burn (ghostSettleNet), one-sided with a dust allowance:
+///         bucket share<->index floor division strands <=1 wei per mutating
+///         op inside the engine, always engine-favoring, so the ledger side
+///         may exceed the totals side by at most ghostOps wei — and never
+///         the other way around. hWarp settles every post right after
+///         warping, so all reads here are stored (settled), not projected.
 ///   INV-3 VS bounded: baseVSRay and effectiveVSRay are always within
 ///         [-RAY, +RAY] for every claim, after any sequence.
 ///   INV-4 Single-sided: no (actor, post) ever holds both support and challenge
@@ -256,15 +299,13 @@ contract ProtocolInvariantsTest is Test {
         );
     }
 
-    /// INV-2: on-chain totals equal net principal tracked by the handler.
-    /// Exact because there is no epoch settlement in this suite (no warp).
-    /// Additive form avoids any underflow: positions + withdrawn == deposited.
+    /// INV-2: totals track net principal + settlement, up to engine-favoring
+    /// floor-dust (<=1 wei per mutating op). patch_prD_invariant_warp
     function invariant_totalsConserved() public view {
-        assertEq(
-            _sumAllPositions() + handler.ghostWithdrawn(),
-            handler.ghostDeposited(),
-            "post totals + withdrawn != deposited"
-        );
+        int256 lhs = int256(_sumAllPositions() + handler.ghostWithdrawn());
+        int256 rhs = int256(handler.ghostDeposited()) + handler.ghostSettleNet();
+        assertLe(lhs, rhs, "totals + withdrawn exceed deposited + settled (engine leaked value)");
+        assertLe(rhs - lhs, int256(handler.ghostOps()), "conservation gap exceeds 1-wei-per-op dust bound");
     }
 
     function _sumAllPositions() internal view returns (uint256 sumPositions) {
