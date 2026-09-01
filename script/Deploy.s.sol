@@ -231,12 +231,14 @@ contract Deploy is Script {
         );
         token.mint(genesisTreasury, genesisLiquid);
         console.log("GENESIS: liquid -> treasury:", genesisTreasury);
+        address vestingWalletAddr = address(0); // stays zero when no lock (addresses.json sentinel)
         if (genesisLocked > 0) {
             uint64 vestStart = uint64(vm.envOr("VSP_VESTING_START_TS", uint256(token.INCEPTION_TIMESTAMP())));
             uint64 vestDuration = uint64(vm.envOr("VSP_VESTING_DURATION_SECONDS", uint256(4 * 365 days)));
             VestingWallet vestingWallet = new VestingWallet(genesisTreasury, vestStart, vestDuration);
-            token.mint(address(vestingWallet), genesisLocked);
-            console.log("GENESIS: locked -> VestingWallet:", address(vestingWallet));
+            vestingWalletAddr = address(vestingWallet);
+            token.mint(vestingWalletAddr, genesisLocked);
+            console.log("GENESIS: locked -> VestingWallet:", vestingWalletAddr);
             console.log("GENESIS: vesting start / duration (s):", vestStart, vestDuration);
         } else {
             console.log("GENESIS: no locked tranche (VSP_GENESIS_LOCKED_SUPPLY=0)");
@@ -299,7 +301,7 @@ contract Deploy is Script {
             '","ProtocolPolicy":"',
             vm.toString(address(protocolPolicy)),
             '","VestingWallet":"',
-            vm.toString(address(vestingWallet)),
+            vm.toString(vestingWalletAddr), // address(0) when no lock at genesis
             '"}'
         );
 
