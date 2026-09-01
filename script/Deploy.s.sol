@@ -209,31 +209,40 @@ contract Deploy is Script {
             )
         );
 
-        // ── patch_oneshot_genesis: ONE-SHOT GENESIS MINT + LOCK ──
-        // The full supply is minted here, once, split liquid/locked:
-        //   liquid  -> GENESIS_TREASURY (LP seed + board-authorized ops/grants)
-        //   locked  -> OZ VestingWallet (linear release to GENESIS_TREASURY)
+        // ── patch_oneshot_genesis: ONE-SHOT GENESIS MINT ──
+        // The full supply is minted here, once. Default (patch_genesis_nolock,
+        // founder ruling 2026-09-01): ALL of it to GENESIS_TREASURY, no lock at
+        // genesis. A lock is one-way (can be added later by transferring into a
+        // VestingWallet, never removed), so it is deferred until a concrete
+        // trigger exists. Setting VSP_GENESIS_LOCKED_SUPPLY > 0 re-enables the
+        // locked tranche -> OZ VestingWallet (linear release to the treasury);
+        // when enabled, set VSP_VESTING_START_TS explicitly (default is
+        // INCEPTION_TIMESTAMP, which may be in the past at deploy time).
         // The deployer can mint ONLY inside this script (Authority constructor
         // auto-grant, revoked at the end). Liquid+locked must equal
         // VSP_INCEPTION_SUPPLY so the flat cap is filled exactly: any later
         // capped mint of even 1 wei reverts MintExceedsTimeWindowCap.
         address genesisTreasury = vm.envOr("VSP_GENESIS_TREASURY", deployer);
-        uint256 genesisLiquid = vm.envOr("VSP_GENESIS_LIQUID_SUPPLY", uint256(100_000_000 * 1e18)); // patch_genesis_1b
-        uint256 genesisLocked = vm.envOr("VSP_GENESIS_LOCKED_SUPPLY", uint256(900_000_000 * 1e18));
+        uint256 genesisLocked = vm.envOr("VSP_GENESIS_LOCKED_SUPPLY", uint256(0)); // patch_genesis_nolock
+        uint256 genesisLiquid = vm.envOr("VSP_GENESIS_LIQUID_SUPPLY", token.INCEPTION_SUPPLY() - genesisLocked);
         require(
             genesisLiquid + genesisLocked == token.INCEPTION_SUPPLY(),
             "Deploy: genesis liquid+locked must equal VSP_INCEPTION_SUPPLY (fill the flat cap exactly)"
         );
-        uint64 vestStart = uint64(vm.envOr("VSP_VESTING_START_TS", uint256(token.INCEPTION_TIMESTAMP())));
-        uint64 vestDuration = uint64(vm.envOr("VSP_VESTING_DURATION_SECONDS", uint256(4 * 365 days)));
-        VestingWallet vestingWallet = new VestingWallet(genesisTreasury, vestStart, vestDuration);
         token.mint(genesisTreasury, genesisLiquid);
-        token.mint(address(vestingWallet), genesisLocked);
+        console.log("GENESIS: liquid -> treasury:", genesisTreasury);
+        if (genesisLocked > 0) {
+            uint64 vestStart = uint64(vm.envOr("VSP_VESTING_START_TS", uint256(token.INCEPTION_TIMESTAMP())));
+            uint64 vestDuration = uint64(vm.envOr("VSP_VESTING_DURATION_SECONDS", uint256(4 * 365 days)));
+            VestingWallet vestingWallet = new VestingWallet(genesisTreasury, vestStart, vestDuration);
+            token.mint(address(vestingWallet), genesisLocked);
+            console.log("GENESIS: locked -> VestingWallet:", address(vestingWallet));
+            console.log("GENESIS: vesting start / duration (s):", vestStart, vestDuration);
+        } else {
+            console.log("GENESIS: no locked tranche (VSP_GENESIS_LOCKED_SUPPLY=0)");
+        }
         require(token.totalSupply() == token.INCEPTION_SUPPLY(), "Deploy: genesis mint != inception supply");
         console.log("GENESIS: total supply (wei):", token.totalSupply());
-        console.log("GENESIS: liquid -> treasury:", genesisTreasury);
-        console.log("GENESIS: locked -> VestingWallet:", address(vestingWallet));
-        console.log("GENESIS: vesting start / duration (s):", vestStart, vestDuration);
 
         vm.label(address(registry), "PostRegistry");
         vm.label(address(graph), "LinkGraph");
