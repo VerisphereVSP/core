@@ -119,7 +119,10 @@ contract Deploy is Script {
             // wrongly-granted future minter cannot mint. StakeEngine (exempt) is
             // the only address that can move supply, per protocol staking mechanics.
             vm.envOr("VSP_INCEPTION_TIMESTAMP", uint256(1778544000)),
-            vm.envOr("VSP_INCEPTION_SUPPLY", uint256(1_000_002_000 * 1e18)),
+            // 2026-09-01 (patch_genesis_1b): genesis is 1,000,000,000 VSP EXACTLY
+            // (founder decision). The former +2,000 was an LP-seed allowance stacked
+            // on the liquid tranche; the LP seed is now drawn FROM liquid instead.
+            vm.envOr("VSP_INCEPTION_SUPPLY", uint256(1_000_000_000 * 1e18)),
             vm.envOr("VSP_GROWTH_BASE_PER_YEAR", uint256(1e18)),
             predictedStakeProxy // patch_bundle10_5_part2a_stakeengine_exempt
         ); // patch_bundle10_5_part2a_timecap: 4-arg constructor
@@ -215,7 +218,7 @@ contract Deploy is Script {
         // VSP_INCEPTION_SUPPLY so the flat cap is filled exactly: any later
         // capped mint of even 1 wei reverts MintExceedsTimeWindowCap.
         address genesisTreasury = vm.envOr("VSP_GENESIS_TREASURY", deployer);
-        uint256 genesisLiquid = vm.envOr("VSP_GENESIS_LIQUID_SUPPLY", uint256(100_002_000 * 1e18));
+        uint256 genesisLiquid = vm.envOr("VSP_GENESIS_LIQUID_SUPPLY", uint256(100_000_000 * 1e18)); // patch_genesis_1b
         uint256 genesisLocked = vm.envOr("VSP_GENESIS_LOCKED_SUPPLY", uint256(900_000_000 * 1e18));
         require(
             genesisLiquid + genesisLocked == token.INCEPTION_SUPPLY(),

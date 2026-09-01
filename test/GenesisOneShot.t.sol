@@ -19,8 +19,8 @@ import {MockCPAMM} from "../src/mock/MockCPAMM.sol";
 ///       everything at end; release() pays the beneficiary
 ///   G6  after revoking the deployer, the minter set is exactly {stakeEngine}
 contract GenesisOneShotTest is Test {
-    uint256 constant GENESIS = 1_000_002_000 * 1e18;
-    uint256 constant LIQUID = 100_002_000 * 1e18;
+    uint256 constant GENESIS = 1_000_000_000 * 1e18; // patch_genesis_1b: 1B exactly
+    uint256 constant LIQUID = 100_000_000 * 1e18;
     uint256 constant LOCKED = 900_000_000 * 1e18;
     uint256 constant INCEPTION_TS = 1_778_544_000;
     uint64 constant VEST_DURATION = uint64(4 * 365 days);
