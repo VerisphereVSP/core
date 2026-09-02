@@ -19,8 +19,10 @@ import {MockCPAMM} from "../src/mock/MockCPAMM.sol";
 ///       everything at end; release() pays the beneficiary
 ///   G6  after revoking the deployer, the minter set is exactly {stakeEngine}
 contract GenesisOneShotTest is Test {
-    uint256 constant GENESIS = 1_000_002_000 * 1e18;
-    uint256 constant LIQUID = 100_002_000 * 1e18;
+    uint256 constant GENESIS = 1_000_000_000 * 1e18; // patch_genesis_1b: 1B exactly
+    // patch_genesis_nolock: default genesis mints ALL of GENESIS to the treasury.
+    // LOCKED below is only used by G5, which exercises the OPTIONAL lock path
+    // (a lock added later by transferring treasury supply into a VestingWallet).
     uint256 constant LOCKED = 900_000_000 * 1e18;
     uint256 constant INCEPTION_TS = 1_778_544_000;
     uint64 constant VEST_DURATION = uint64(4 * 365 days);
@@ -46,10 +48,8 @@ contract GenesisOneShotTest is Test {
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), abi.encodeCall(VSPToken.initialize, (address(authority))));
         token = VSPToken(address(proxy));
 
-        // genesis: mint liquid to treasury, locked to the vesting wallet
-        vest = new VestingWallet(treasury, uint64(INCEPTION_TS), VEST_DURATION);
-        token.mint(treasury, LIQUID);
-        token.mint(address(vest), LOCKED);
+        // genesis (no lock, patch_genesis_nolock): the whole supply to the treasury
+        token.mint(treasury, GENESIS);
 
         // mirror the deploy script's end state: StakeEngine granted, deployer revoked
         authority.setMinter(stakeEngine, true);
@@ -90,9 +90,16 @@ contract GenesisOneShotTest is Test {
         assertEq(token.maxAllowedSupply(), GENESIS);
     }
 
-    // G5
+    // G5 — OPTIONAL lock path: the lock is not part of genesis; it can be added
+    // later by moving treasury supply into a VestingWallet. Verifies the schedule
+    // math and that the deferred path works unchanged.
     function test_vesting_schedule() public {
+        vest = new VestingWallet(treasury, uint64(INCEPTION_TS), VEST_DURATION);
+        vm.prank(treasury);
+        token.transfer(address(vest), LOCKED);
+        uint256 LIQUID = GENESIS - LOCKED;
         assertEq(token.balanceOf(address(vest)), LOCKED);
+        assertEq(token.balanceOf(treasury), LIQUID);
 
         // nothing before start (warp back to just before inception)
         vm.warp(INCEPTION_TS - 1);
@@ -109,8 +116,14 @@ contract GenesisOneShotTest is Test {
         // everything at end
         vm.warp(INCEPTION_TS + VEST_DURATION + 1);
         vest.release(address(token));
-        assertEq(token.balanceOf(treasury), LIQUID + LOCKED);
+        assertEq(token.balanceOf(treasury), GENESIS);
         assertEq(token.balanceOf(address(vest)), 0);
+    }
+
+    // G5b — the no-lock genesis itself: whole supply sits with the treasury
+    function test_genesis_no_lock_all_to_treasury() public view {
+        assertEq(token.balanceOf(treasury), GENESIS);
+        assertEq(token.totalSupply(), GENESIS);
     }
 
     // G6
