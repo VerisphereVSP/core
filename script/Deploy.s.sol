@@ -36,9 +36,23 @@ contract Deploy is Script {
         Authority authority = new Authority(gov);
 
         // Forwarder is deployed separately (see app/contracts/VerisphereForwarder.sol).
-        // Pass its address via FORWARDER_ADDRESS env var.
-        // Use address(0) if no forwarder is needed (direct wallet interaction only).
-        address forwarder = vm.envOr("FORWARDER_ADDRESS", address(0));
+        // patch_fw_upgrade: FORWARDER_ADDRESS is now REQUIRED. The previous silent
+        // address(0) default constructed every consumer trusting no forwarder
+        // during the 2026-09 Fuji genesis, killing the entire gasless relay path
+        // ("Invalid signature" on every meta-tx) until an implementation upgrade.
+        // On mainnet there is no cheap upgrade-your-way-out on day one. Opt out
+        // ONLY with an explicit NO_FORWARDER=1 (direct-wallet-only deployments).
+        address forwarder;
+        if (vm.envOr("NO_FORWARDER", false)) {
+            forwarder = address(0);
+            console.log("WARNING: NO_FORWARDER=1 - consumers will trust NO forwarder (relay disabled)");
+        } else {
+            forwarder = vm.envAddress("FORWARDER_ADDRESS");
+            require(
+                forwarder != address(0) && forwarder.code.length > 0,
+                "Deploy: FORWARDER_ADDRESS must be a deployed contract (or set NO_FORWARDER=1 to opt out)"
+            );
+        }
 
         // Deploy TimelockController for policy contracts (and Authority in prod).
         //
