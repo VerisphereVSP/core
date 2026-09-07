@@ -2,8 +2,8 @@
   "_meta": {
     "contract": "src/StakeEngine.sol:StakeEngine",
     "forge_version": "forge Version: 1.5.1-stable",
-    "generated_at": "2026-08-30T16:23:26Z",
-    "layout_sha256": "bccba5d07691352c8ea273b11737e2babc2c4a82e44b76a6127f4c326ffa93df",
+    "generated_at": "2026-09-07T13:38:25Z",
+    "layout_sha256": "c4b663124e65af3bacfd15d1fa2f56989c8269198deab26d2717fdd52251fb52",
     "note": "Storage-layout regression baseline. Regenerate ONLY for an intended, reviewed, upgrade-safe layout change via check.sh --update.",
     "schema": 2
   },
@@ -118,10 +118,16 @@
         "type": "t_bool"
       },
       {
-        "label": "__gap",
+        "label": "postRegistry",
         "offset": 0,
         "slot": 134,
-        "type": "t_array(t_uint256)499_storage"
+        "type": "t_address"
+      },
+      {
+        "label": "__gap",
+        "offset": 0,
+        "slot": 135,
+        "type": "t_array(t_uint256)498_storage"
       }
     ],
     "types": {
@@ -154,10 +160,10 @@
         "encoding": "inplace",
         "numberOfBytes": "3200"
       },
-      "t_array(t_uint256)499_storage": {
+      "t_array(t_uint256)498_storage": {
         "base": "t_uint256",
         "encoding": "inplace",
-        "numberOfBytes": "15968"
+        "numberOfBytes": "15936"
       },
       "t_bool": {
         "encoding": "inplace",

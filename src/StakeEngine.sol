@@ -1573,7 +1573,7 @@ contract StakeEngine is GovernedUpgradeable {
         q.total = total + _bucketLive(q); // patch_h1a_bucket
     }
 
-    uint256[499] private __gap;
+    uint256[498] private __gap; // 499 -> 498: one slot consumed by postRegistry (H1)
 }
 
 /// @dev Minimal read surface the engine needs from PostRegistry (H1).
