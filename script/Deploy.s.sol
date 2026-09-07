@@ -196,6 +196,7 @@ contract Deploy is Script {
 
         graph.setRegistry(address(registry));
         registry.setLinkGraph(address(graph));
+        stake.setPostRegistry(address(registry)); // H1: engine validates postIds against the registry
 
         ScoreEngine scoreImpl = new ScoreEngine(forwarder);
         ERC1967Proxy scoreProxy = new ERC1967Proxy(
