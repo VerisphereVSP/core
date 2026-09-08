@@ -233,9 +233,15 @@ contract StakeEngine is GovernedUpgradeable {
 
     event PostRegistrySet(address indexed oldRegistry, address indexed newRegistry);
     error InvalidPostId(uint256 postId);
+    error InvalidPostRegistry(address registry);
     error LotExceedsCap(uint256 lotAfter, uint256 cap);
 
     function setPostRegistry(address registry_) external onlyGovernance {
+        // Slither missing-zero-check (CI): a zero registry would silently
+        // disable the range check — the fail-open shape H1 exists to close.
+        if (registry_ == address(0) || registry_.code.length == 0) {
+            revert InvalidPostRegistry(registry_);
+        }
         address old = postRegistry;
         postRegistry = registry_;
         emit PostRegistrySet(old, registry_);
