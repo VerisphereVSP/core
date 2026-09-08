@@ -220,6 +220,42 @@ contract StakeEngine is GovernedUpgradeable {
     bool public paused;
     bool internal _initializedV2;
 
+    /// H1 (security review 2026-09): the engine never checked that a postId
+    /// exists, so staking on an unborn/phantom id minted uncapped yield with
+    /// no claim, no fee, and nothing for indexers to show. Storage is APPENDED
+    /// (upgrade-safe, same pattern as V2). Wired by Deploy.s.sol via
+    /// setPostRegistry; tools/verify-genesis.sh refuses an unset value.
+    /// Semantics: postId == 0 is ALWAYS rejected; when a registry is set,
+    /// postId must be < registry.nextPostId(). When unset (legacy test
+    /// harnesses only), the range check is skipped — this is deliberate and
+    /// gated by deployment verification, not by the contract.
+    address public postRegistry;
+
+    event PostRegistrySet(address indexed oldRegistry, address indexed newRegistry);
+    error InvalidPostId(uint256 postId);
+    error InvalidPostRegistry(address registry);
+    error LotExceedsCap(uint256 lotAfter, uint256 cap);
+
+    function setPostRegistry(address registry_) external onlyGovernance {
+        // Slither missing-zero-check (CI): a zero registry would silently
+        // disable the range check — the fail-open shape H1 exists to close.
+        if (registry_ == address(0) || registry_.code.length == 0) {
+            revert InvalidPostRegistry(registry_);
+        }
+        address old = postRegistry;
+        postRegistry = registry_;
+        emit PostRegistrySet(old, registry_);
+    }
+
+    function _requireValidPost(uint256 postId) internal view {
+        if (postId == 0) {
+            revert InvalidPostId(postId);
+        }
+        if (postRegistry != address(0) && postId >= IPostRegistryIds(postRegistry).nextPostId()) {
+            revert InvalidPostId(postId);
+        }
+    }
+
     event Paused(address indexed by);
     event Unpaused(address indexed by);
     event GuardianSet(address indexed oldGuardian, address indexed newGuardian);
@@ -462,6 +498,7 @@ contract StakeEngine is GovernedUpgradeable {
     // ------------------------------------------------------------
 
     function stake(uint256 postId, uint8 side, uint256 amount) external nonReentrant whenNotPaused {
+        _requireValidPost(postId); // H1 / H3
         if (amount == 0) {
             revert AmountZero();
         }
@@ -476,6 +513,14 @@ contract StakeEngine is GovernedUpgradeable {
         uint8 opposite = 1 - side;
         if (_userAmount(psCheck, opposite, _msgSender()) > 0) {
             revert OppositeSideStaked();
+        }
+        // M3 (security review 2026-09): G-9 capped each CALL, not the lot, so
+        // ten calls pushed 100M through. The cap now binds the lot total.
+        {
+            uint256 lotAfter = _userAmount(psCheck, side, _msgSender()) + amount;
+            if (lotAfter > MAX_STAKE_AMOUNT) {
+                revert LotExceedsCap(lotAfter, MAX_STAKE_AMOUNT);
+            }
         }
         require(ERC20_TOKEN.transferFrom(_msgSender(), address(this), amount), "VSP transfer failed");
         PostState storage ps = posts[postId];
@@ -538,7 +583,14 @@ contract StakeEngine is GovernedUpgradeable {
     ///         target > 0: desired support stake amount
     ///         target < 0: desired challenge stake amount (absolute value)
     ///         target == 0: withdraw all stakes on this post
-    function setStake(uint256 postId, int256 target) external nonReentrant whenNotPaused {
+    function setStake(uint256 postId, int256 target) external nonReentrant {
+        // Security review 2026-09 (Low): a full exit (target == 0) must stay
+        // open while paused, as the pause docs promise; only non-zero targets
+        // are blocked. withdraw() was already exempt.
+        if (paused && target != 0) {
+            revert WhenPaused();
+        }
+        _requireValidPost(postId); // H1 / H3
         // bundle05_a G-10: cap |target| at MAX_STAKE_AMOUNT.
         uint256 absT_b05a = target >= 0 ? uint256(target) : uint256(-target);
         if (absT_b05a > MAX_STAKE_AMOUNT) {
@@ -1527,5 +1579,10 @@ contract StakeEngine is GovernedUpgradeable {
         q.total = total + _bucketLive(q); // patch_h1a_bucket
     }
 
-    uint256[499] private __gap;
+    uint256[498] private __gap; // 499 -> 498: one slot consumed by postRegistry (H1)
+}
+
+/// @dev Minimal read surface the engine needs from PostRegistry (H1).
+interface IPostRegistryIds {
+    function nextPostId() external view returns (uint256);
 }

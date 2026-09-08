@@ -52,7 +52,7 @@ Upgradeability, so you know what you are testing: the core protocol contracts
 (StakeEngine, ScoreEngine, PostRegistry, LinkGraph, ProtocolViews) are
 UUPS-upgradeable via GovernedUpgradeable, authorized through Authority, with
 upgrades running through script/Upgrade.s.sol and the storage-layout check.
-VSPToken and Authority themselves are not proxied.
+VSPToken is a UUPS proxy (`_authorizeUpgrade` gated by `authority.owner()`); Authority itself is not proxied.
 <!-- patch_pushunblock_proxyline: added 2026-08-21; the pre-rewrite doc
      falsely claimed "No upgradeable proxies in MVP". -->
 

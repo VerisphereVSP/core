@@ -378,7 +378,11 @@ contract PostRegistry is GovernedUpgradeable {
     }
 
     function _exists(uint256 postId) internal view returns (bool) {
-        return postId < nextPostId;
+        // H3 (security review 2026-09): IDs start at 1; posts[0] is an
+        // uninitialized struct whose contentType defaults to Claim, so the
+        // old `postId < nextPostId` made a phantom "claim 0" linkable and
+        // scoreable with no text and no author.
+        return postId != 0 && postId < nextPostId;
     }
 
     uint256[499] private __gap;
