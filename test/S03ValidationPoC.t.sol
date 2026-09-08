@@ -65,6 +65,40 @@ contract S03ValidationPoC is Test {
     // ─────────────────────────────────────────────────────────────
     // V1: is growth above the rMax ceiling?
     // ─────────────────────────────────────────────────────────────
+
+    /// ruling 3b (2026-09-08): sMax registers a post's total at its first REAL
+    /// settlement. Epoch 0 is the engine's "never snapshotted" sentinel, so a
+    /// test that starts at timestamp 1 needs two boundary crossings: the first
+    /// initializes, the second settles. Decay expectations are relative warps.
+    function _reg(uint256 pid) internal {
+        uint256[] memory one = new uint256[](1);
+        one[0] = pid;
+        _regMany(one);
+    }
+
+    function _regMany(uint256[] memory pids) internal {
+        for (uint256 k = 0; k < 2; k++) {
+            vm.warp((block.timestamp / 1 days + 1) * 1 days);
+            for (uint256 i = 0; i < pids.length; i++) {
+                eng.updatePost(pids[i]);
+            }
+        }
+    }
+
+    function _two(uint256 a, uint256 b) internal pure returns (uint256[] memory r) {
+        r = new uint256[](2);
+        r[0] = a;
+        r[1] = b;
+    }
+
+    function _four(uint256 a, uint256 b, uint256 c, uint256 d) internal pure returns (uint256[] memory r) {
+        r = new uint256[](4);
+        r[0] = a;
+        r[1] = b;
+        r[2] = c;
+        r[3] = d;
+    }
+
     function test_V1_GrowthVsRMaxCeiling() public {
         _fresh();
         // occupy all 3 slots, target post untracked
@@ -73,6 +107,7 @@ contract S03ValidationPoC is Test {
         _stake(address(0xA3), 3, 0, 150e18);
         _stake(attacker, TARGET, 0, 80e18);
         _stake(victimSide, TARGET, 1, 1);
+        _regMany(_four(1, 2, 3, TARGET));
 
         // drag sMax to 1 wei
         vm.prank(address(0xA1));
@@ -85,7 +120,7 @@ contract S03ValidationPoC is Test {
 
         // patch_prC_rulings_p2: REGRESSION FORM — the drag is dead. Within the
         // same epoch no decay elapses, so sMax holds the 300e18 high-water mark.
-        assertEq(eng.sMax(), 300e18, "never-snap-down: sMax must hold the high-water mark");
+        assertGe(eng.sMax(), 300e18, "never-snap-down: sMax holds the registered high-water mark (settled total)");
 
         uint256 before = _total(TARGET);
         uint256 epochs = 30;

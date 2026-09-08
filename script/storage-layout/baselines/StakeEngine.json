@@ -2,8 +2,8 @@
   "_meta": {
     "contract": "src/StakeEngine.sol:StakeEngine",
     "forge_version": "forge Version: 1.5.1-stable",
-    "generated_at": "2026-09-07T13:38:25Z",
-    "layout_sha256": "c4b663124e65af3bacfd15d1fa2f56989c8269198deab26d2717fdd52251fb52",
+    "generated_at": "2026-09-08T15:29:11Z",
+    "layout_sha256": "417a23c9b79a0ea7ca14d4b939351d9a2fa605d4ba21fc763bd67cfcbfb38b1d",
     "note": "Storage-layout regression baseline. Regenerate ONLY for an intended, reviewed, upgrade-safe layout change via check.sh --update.",
     "schema": 2
   },
@@ -124,10 +124,28 @@
         "type": "t_address"
       },
       {
-        "label": "__gap",
+        "label": "posOffset",
         "offset": 0,
         "slot": 135,
-        "type": "t_array(t_uint256)498_storage"
+        "type": "t_mapping(t_uint256,t_mapping(t_uint8,t_mapping(t_address,t_uint256)))"
+      },
+      {
+        "label": "entryTime",
+        "offset": 0,
+        "slot": 136,
+        "type": "t_mapping(t_uint256,t_mapping(t_uint8,t_mapping(t_address,t_uint256)))"
+      },
+      {
+        "label": "settledTotal",
+        "offset": 0,
+        "slot": 137,
+        "type": "t_mapping(t_uint256,t_uint256)"
+      },
+      {
+        "label": "__gap",
+        "offset": 0,
+        "slot": 138,
+        "type": "t_array(t_uint256)495_storage"
       }
     ],
     "types": {
@@ -160,10 +178,10 @@
         "encoding": "inplace",
         "numberOfBytes": "3200"
       },
-      "t_array(t_uint256)498_storage": {
+      "t_array(t_uint256)495_storage": {
         "base": "t_uint256",
         "encoding": "inplace",
-        "numberOfBytes": "15936"
+        "numberOfBytes": "15840"
       },
       "t_bool": {
         "encoding": "inplace",
@@ -187,11 +205,29 @@
         "numberOfBytes": "32",
         "value": "t_uint256"
       },
+      "t_mapping(t_uint256,t_mapping(t_uint8,t_mapping(t_address,t_uint256)))": {
+        "encoding": "mapping",
+        "key": "t_uint256",
+        "numberOfBytes": "32",
+        "value": "t_mapping(t_uint8,t_mapping(t_address,t_uint256))"
+      },
       "t_mapping(t_uint256,t_struct(PostState)_storage)": {
         "encoding": "mapping",
         "key": "t_uint256",
         "numberOfBytes": "32",
         "value": "t_struct(PostState)_storage"
+      },
+      "t_mapping(t_uint256,t_uint256)": {
+        "encoding": "mapping",
+        "key": "t_uint256",
+        "numberOfBytes": "32",
+        "value": "t_uint256"
+      },
+      "t_mapping(t_uint8,t_mapping(t_address,t_uint256))": {
+        "encoding": "mapping",
+        "key": "t_uint8",
+        "numberOfBytes": "32",
+        "value": "t_mapping(t_address,t_uint256)"
       },
       "t_struct(PostState)_storage": {
         "encoding": "inplace",
