@@ -63,6 +63,39 @@ contract S03SMaxTrackerPoC is Test {
         return s + c;
     }
 
+    /// ruling 3b (2026-09-08): sMax registers a post's total at its first REAL
+    /// settlement. Epoch 0 is the engine's "never snapshotted" sentinel, so a
+    /// test that starts at timestamp 1 needs two boundary crossings: the first
+    /// initializes, the second settles. Decay expectations are relative warps.
+    function _reg(uint256 pid) internal {
+        uint256[] memory one = new uint256[](1);
+        one[0] = pid;
+        _regMany(one);
+    }
+
+    function _regMany(uint256[] memory pids) internal {
+        for (uint256 k = 0; k < 2; k++) {
+            vm.warp((block.timestamp / 1 days + 1) * 1 days);
+            for (uint256 i = 0; i < pids.length; i++) {
+                eng.updatePost(pids[i]);
+            }
+        }
+    }
+
+    function _two(uint256 a, uint256 b) internal pure returns (uint256[] memory r) {
+        r = new uint256[](2);
+        r[0] = a;
+        r[1] = b;
+    }
+
+    function _four(uint256 a, uint256 b, uint256 c, uint256 d) internal pure returns (uint256[] memory r) {
+        r = new uint256[](4);
+        r[0] = a;
+        r[1] = b;
+        r[2] = c;
+        r[3] = d;
+    }
+
     function test_S03_SMaxBelowTrueLeader() public {
         // Posts 1,2,3 occupy all three tracked slots with LARGER totals.
         _stake(alice, 1, 0, 300e18);
@@ -70,6 +103,7 @@ contract S03SMaxTrackerPoC is Test {
         _stake(carol, 3, 0, 150e18);
         // Post 4 is the untracked survivor: smaller now, but it will outlive them.
         _stake(dave, 4, 0, 80e18);
+        _regMany(_four(1, 2, 3, 4));
 
         (uint256 p0, uint256 t0, uint256 p1, uint256 t1, uint256 p2, uint256 t2) = eng.getTopPosts();
         emit log("--- topPosts after seeding (post 4 is NOT tracked) ---");
@@ -153,6 +187,7 @@ contract S03SMaxTrackerPoC is Test {
         _stake(bob, 2, 0, 200e18);
         _stake(carol, 3, 0, 150e18);
         _stake(dave, 4, 0, 80e18); // untracked survivor
+        _regMany(_four(1, 2, 3, 4));
 
         vm.prank(alice);
         eng.withdraw(1, 0, 300e18, true);

@@ -1,9 +1,9 @@
 {
   "by_impact": {
     "High": 0,
-    "Informational": 42,
+    "Informational": 44,
     "Low": 36,
-    "Medium": 34,
+    "Medium": 32,
     "Optimization": 2
   },
   "findings": [
@@ -29,7 +29,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:541"
+      "location": "src/StakeEngine.sol:611"
     },
     {
       "check": "reentrancy-no-eth",
@@ -37,7 +37,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:541"
+      "location": "src/StakeEngine.sol:611"
     },
     {
       "check": "reentrancy-no-eth",
@@ -45,7 +45,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:541"
+      "location": "src/StakeEngine.sol:611"
     },
     {
       "check": "reentrancy-no-eth",
@@ -53,7 +53,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:541"
+      "location": "src/StakeEngine.sol:611"
     },
     {
       "check": "reentrancy-no-eth",
@@ -61,7 +61,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:541"
+      "location": "src/StakeEngine.sol:611"
     },
     {
       "check": "reentrancy-no-eth",
@@ -69,7 +69,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:541"
+      "location": "src/StakeEngine.sol:611"
     },
     {
       "check": "reentrancy-no-eth",
@@ -77,7 +77,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:541"
+      "location": "src/StakeEngine.sol:611"
     },
     {
       "check": "reentrancy-no-eth",
@@ -85,7 +85,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:541"
+      "location": "src/StakeEngine.sol:611"
     },
     {
       "check": "reentrancy-no-eth",
@@ -93,7 +93,15 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:541"
+      "location": "src/StakeEngine.sol:611"
+    },
+    {
+      "check": "dead-code",
+      "confidence": "Medium",
+      "element": "_applyEpoch",
+      "fingerprint": "104f725f62702afd",
+      "impact": "Informational",
+      "location": "src/StakeEngine.sol:798"
     },
     {
       "check": "divide-before-multiply",
@@ -101,7 +109,7 @@
       "element": "_projectTotals",
       "fingerprint": "1176ec9c82beef04",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:782"
+      "location": "src/StakeEngine.sol:893"
     },
     {
       "check": "divide-before-multiply",
@@ -117,7 +125,7 @@
       "element": "_settleBucket",
       "fingerprint": "136d4d02ff0927b2",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1325"
+      "location": "src/StakeEngine.sol:1470"
     },
     {
       "check": "incorrect-equality",
@@ -125,7 +133,15 @@
       "element": "_settleBucket",
       "fingerprint": "136d4d02ff0927b2",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1325"
+      "location": "src/StakeEngine.sol:1470"
+    },
+    {
+      "check": "cyclomatic-complexity",
+      "confidence": "High",
+      "element": "_increaseUser",
+      "fingerprint": "15b9d49815e6de7f",
+      "impact": "Informational",
+      "location": "src/StakeEngine.sol:1334"
     },
     {
       "check": "incorrect-equality",
@@ -133,7 +149,7 @@
       "element": "_projectLotValue",
       "fingerprint": "160f822661d43b1c",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:854"
+      "location": "src/StakeEngine.sol:967"
     },
     {
       "check": "divide-before-multiply",
@@ -141,7 +157,7 @@
       "element": "_settleBucket",
       "fingerprint": "16e0738556de802c",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1325"
+      "location": "src/StakeEngine.sol:1470"
     },
     {
       "check": "reentrancy-events",
@@ -149,7 +165,7 @@
       "element": "_chargeFee",
       "fingerprint": "1da534071601ff15",
       "impact": "Low",
-      "location": "src/PostRegistry.sol:365"
+      "location": "src/PostRegistry.sol:370"
     },
     {
       "check": "timestamp",
@@ -157,7 +173,7 @@
       "element": "_projectLotValue",
       "fingerprint": "232dac1e92878286",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:854"
+      "location": "src/StakeEngine.sol:967"
     },
     {
       "check": "reentrancy-events",
@@ -173,7 +189,7 @@
       "element": "_maybeSnapshot",
       "fingerprint": "295a69aafc4220d2",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:608"
+      "location": "src/StakeEngine.sol:684"
     },
     {
       "check": "incorrect-equality",
@@ -181,7 +197,7 @@
       "element": "_projectBucket",
       "fingerprint": "29f8e8529df820c6",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1284"
+      "location": "src/StakeEngine.sol:1429"
     },
     {
       "check": "incorrect-equality",
@@ -189,7 +205,7 @@
       "element": "_projectBucket",
       "fingerprint": "29f8e8529df820c6",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1284"
+      "location": "src/StakeEngine.sol:1429"
     },
     {
       "check": "calls-loop",
@@ -213,7 +229,7 @@
       "element": "stake",
       "fingerprint": "2bc8456d5b7492a2",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:464"
+      "location": "src/StakeEngine.sol:526"
     },
     {
       "check": "reentrancy-no-eth",
@@ -221,7 +237,15 @@
       "element": "stake",
       "fingerprint": "2bc8456d5b7492a2",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:464"
+      "location": "src/StakeEngine.sol:526"
+    },
+    {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "_applyEpochFor",
+      "fingerprint": "2deecfc5af08e2e0",
+      "impact": "Medium",
+      "location": "src/StakeEngine.sol:808"
     },
     {
       "check": "naming-convention",
@@ -253,7 +277,7 @@
       "element": "_applySMaxDecay",
       "fingerprint": "38b7a222c16b58ec",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:994"
+      "location": "src/StakeEngine.sol:1120"
     },
     {
       "check": "costly-loop",
@@ -261,7 +285,7 @@
       "element": "_applySMaxDecay",
       "fingerprint": "38b7a222c16b58ec",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:994"
+      "location": "src/StakeEngine.sol:1120"
     },
     {
       "check": "costly-loop",
@@ -269,15 +293,7 @@
       "element": "_applySMaxDecay",
       "fingerprint": "38b7a222c16b58ec",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:994"
-    },
-    {
-      "check": "timestamp",
-      "confidence": "Medium",
-      "element": "_applyEpoch",
-      "fingerprint": "3c84c785fc3a4a9e",
-      "impact": "Low",
-      "location": "src/StakeEngine.sol:712"
+      "location": "src/StakeEngine.sol:1120"
     },
     {
       "check": "divide-before-multiply",
@@ -285,7 +301,7 @@
       "element": "_forceSnapshot",
       "fingerprint": "409b648f0a57d48f",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:624"
+      "location": "src/StakeEngine.sol:700"
     },
     {
       "check": "missing-zero-check",
@@ -301,7 +317,7 @@
       "element": "withdraw",
       "fingerprint": "47ec8394947a0821",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:495"
+      "location": "src/StakeEngine.sol:566"
     },
     {
       "check": "naming-convention",
@@ -317,7 +333,7 @@
       "element": "_forceSnapshot",
       "fingerprint": "4c1f738ab81c6ecc",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:624"
+      "location": "src/StakeEngine.sol:700"
     },
     {
       "check": "reentrancy-benign",
@@ -325,7 +341,7 @@
       "element": "withdraw",
       "fingerprint": "54b347d868f44e5d",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:495"
+      "location": "src/StakeEngine.sol:566"
     },
     {
       "check": "reentrancy-benign",
@@ -333,7 +349,7 @@
       "element": "_forceSnapshot",
       "fingerprint": "558c6d1b47de3929",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:624"
+      "location": "src/StakeEngine.sol:700"
     },
     {
       "check": "timestamp",
@@ -341,7 +357,7 @@
       "element": "_applySMaxDecay",
       "fingerprint": "55a3a4425ec9ad04",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:994"
+      "location": "src/StakeEngine.sol:1120"
     },
     {
       "check": "unused-state",
@@ -357,7 +373,7 @@
       "element": "getPostTotals",
       "fingerprint": "5781a6a7a7e41f03",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:382"
+      "location": "src/StakeEngine.sol:444"
     },
     {
       "check": "constable-states",
@@ -381,7 +397,7 @@
       "element": "_projectSMaxDecay",
       "fingerprint": "5eb3dec4560ad7be",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1048"
+      "location": "src/StakeEngine.sol:1174"
     },
     {
       "check": "naming-convention",
@@ -413,7 +429,7 @@
       "element": "setStake",
       "fingerprint": "63ab651bac26de93",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:541"
+      "location": "src/StakeEngine.sol:611"
     },
     {
       "check": "reentrancy-benign",
@@ -421,7 +437,7 @@
       "element": "setStake",
       "fingerprint": "63ab651bac26de93",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:541"
+      "location": "src/StakeEngine.sol:611"
     },
     {
       "check": "reentrancy-benign",
@@ -429,7 +445,7 @@
       "element": "setStake",
       "fingerprint": "63ab651bac26de93",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:541"
+      "location": "src/StakeEngine.sol:611"
     },
     {
       "check": "timestamp",
@@ -437,7 +453,7 @@
       "element": "_projectSMaxDecay",
       "fingerprint": "66754b062ff1f03d",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1048"
+      "location": "src/StakeEngine.sol:1174"
     },
     {
       "check": "constable-states",
@@ -453,7 +469,15 @@
       "element": "_projectBucket",
       "fingerprint": "691309b6162d9328",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1284"
+      "location": "src/StakeEngine.sol:1429"
+    },
+    {
+      "check": "timestamp",
+      "confidence": "Medium",
+      "element": "_applyEpochFor",
+      "fingerprint": "69cb6a76096d426e",
+      "impact": "Low",
+      "location": "src/StakeEngine.sol:808"
     },
     {
       "check": "reentrancy-events",
@@ -477,7 +501,7 @@
       "element": "__gap",
       "fingerprint": "7d2b7acea2f7071e",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1530"
+      "location": "src/StakeEngine.sol:1688"
     },
     {
       "check": "missing-zero-check",
@@ -493,7 +517,7 @@
       "element": "_projectSideTotal",
       "fingerprint": "81bb502f4ce4f0a8",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:821"
+      "location": "src/StakeEngine.sol:934"
     },
     {
       "check": "naming-convention",
@@ -525,7 +549,7 @@
       "element": "_addOrMergeLot",
       "fingerprint": "8d43dcb8be3d68a6",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:759"
+      "location": "src/StakeEngine.sol:870"
     },
     {
       "check": "costly-loop",
@@ -533,7 +557,7 @@
       "element": "_updateSMax",
       "fingerprint": "8eef076714f26a9c",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:918"
+      "location": "src/StakeEngine.sol:1044"
     },
     {
       "check": "costly-loop",
@@ -541,7 +565,7 @@
       "element": "_updateSMax",
       "fingerprint": "8eef076714f26a9c",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:918"
+      "location": "src/StakeEngine.sol:1044"
     },
     {
       "check": "costly-loop",
@@ -549,7 +573,7 @@
       "element": "_updateSMax",
       "fingerprint": "8eef076714f26a9c",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:918"
+      "location": "src/StakeEngine.sol:1044"
     },
     {
       "check": "costly-loop",
@@ -557,7 +581,7 @@
       "element": "_updateSMax",
       "fingerprint": "8eef076714f26a9c",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:918"
+      "location": "src/StakeEngine.sol:1044"
     },
     {
       "check": "costly-loop",
@@ -565,7 +589,7 @@
       "element": "_updateSMax",
       "fingerprint": "8eef076714f26a9c",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:918"
+      "location": "src/StakeEngine.sol:1044"
     },
     {
       "check": "calls-loop",
@@ -597,7 +621,7 @@
       "element": "_projectBucket",
       "fingerprint": "95b45653cb79b433",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1284"
+      "location": "src/StakeEngine.sol:1429"
     },
     {
       "check": "calls-loop",
@@ -613,15 +637,7 @@
       "element": "__gap",
       "fingerprint": "989231729e0f9bd4",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1530"
-    },
-    {
-      "check": "divide-before-multiply",
-      "confidence": "Medium",
-      "element": "_applyEpoch",
-      "fingerprint": "98ff1344e4051ab1",
-      "impact": "Medium",
-      "location": "src/StakeEngine.sol:712"
+      "location": "src/StakeEngine.sol:1688"
     },
     {
       "check": "missing-zero-check",
@@ -637,7 +653,7 @@
       "element": "guardian_",
       "fingerprint": "9b2ea80b89bd3dc8",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:303"
+      "location": "src/StakeEngine.sol:365"
     },
     {
       "check": "naming-convention",
@@ -645,7 +661,7 @@
       "element": "ERC20_TOKEN",
       "fingerprint": "a4cbf01868eacfce",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:74"
+      "location": "src/StakeEngine.sol:75"
     },
     {
       "check": "timestamp",
@@ -653,7 +669,7 @@
       "element": "_forceSnapshot",
       "fingerprint": "a8b99e3f7d4cd22a",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:624"
+      "location": "src/StakeEngine.sol:700"
     },
     {
       "check": "unused-state",
@@ -661,7 +677,7 @@
       "element": "__gap",
       "fingerprint": "af15571b0bcabf08",
       "impact": "Informational",
-      "location": "src/PostRegistry.sol:384"
+      "location": "src/PostRegistry.sol:393"
     },
     {
       "check": "reentrancy-benign",
@@ -669,7 +685,7 @@
       "element": "refreshSMax",
       "fingerprint": "b07d4159aff96b88",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:986"
+      "location": "src/StakeEngine.sol:1112"
     },
     {
       "check": "naming-convention",
@@ -677,7 +693,7 @@
       "element": "__gap",
       "fingerprint": "b3824838aa2866a7",
       "impact": "Informational",
-      "location": "src/PostRegistry.sol:384"
+      "location": "src/PostRegistry.sol:393"
     },
     {
       "check": "timestamp",
@@ -685,7 +701,7 @@
       "element": "getUserLotInfo",
       "fingerprint": "b6ca2733f200d8fe",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:422"
+      "location": "src/StakeEngine.sol:484"
     },
     {
       "check": "timestamp",
@@ -693,7 +709,7 @@
       "element": "getUserStake",
       "fingerprint": "b83ace379b416a73",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:394"
+      "location": "src/StakeEngine.sol:456"
     },
     {
       "check": "naming-convention",
@@ -717,7 +733,7 @@
       "element": "newGuardian",
       "fingerprint": "c0af0203d581f6e1",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:331"
+      "location": "src/StakeEngine.sol:393"
     },
     {
       "check": "unused-state",
@@ -744,22 +760,6 @@
       "location": "src/ProtocolViews.sol:106"
     },
     {
-      "check": "incorrect-equality",
-      "confidence": "High",
-      "element": "_applyEpoch",
-      "fingerprint": "d22932c07ff62734",
-      "impact": "Medium",
-      "location": "src/StakeEngine.sol:712"
-    },
-    {
-      "check": "incorrect-equality",
-      "confidence": "High",
-      "element": "_applyEpoch",
-      "fingerprint": "d22932c07ff62734",
-      "impact": "Medium",
-      "location": "src/StakeEngine.sol:712"
-    },
-    {
       "check": "naming-convention",
       "confidence": "High",
       "element": "__gap",
@@ -781,7 +781,7 @@
       "element": "_projectSideTotal",
       "fingerprint": "d3d7859eec6e6003",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:821"
+      "location": "src/StakeEngine.sol:934"
     },
     {
       "check": "unused-state",
@@ -797,7 +797,7 @@
       "element": "setStake",
       "fingerprint": "dc1768351561c2fc",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:541"
+      "location": "src/StakeEngine.sol:611"
     },
     {
       "check": "unused-state",
@@ -813,7 +813,7 @@
       "element": "refreshSMax",
       "fingerprint": "de33671b0b3b0d76",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:986"
+      "location": "src/StakeEngine.sol:1112"
     },
     {
       "check": "divide-before-multiply",
@@ -821,7 +821,7 @@
       "element": "_bucketRemove",
       "fingerprint": "e099e66a54a4b768",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1144"
+      "location": "src/StakeEngine.sol:1270"
     },
     {
       "check": "naming-convention",
@@ -829,7 +829,7 @@
       "element": "VSP_TOKEN",
       "fingerprint": "e4a2c54c93cad2ce",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:75"
+      "location": "src/StakeEngine.sol:76"
     },
     {
       "check": "cyclomatic-complexity",
@@ -837,7 +837,7 @@
       "element": "_updateSMax",
       "fingerprint": "e8f294563e30e6d4",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:918"
+      "location": "src/StakeEngine.sol:1044"
     },
     {
       "check": "reentrancy-benign",
@@ -845,7 +845,7 @@
       "element": "stake",
       "fingerprint": "e9daed0a65e92ae4",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:464"
+      "location": "src/StakeEngine.sol:526"
     },
     {
       "check": "divide-before-multiply",
@@ -853,7 +853,7 @@
       "element": "_projectLotValue",
       "fingerprint": "ea7d30779fe16e19",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:854"
+      "location": "src/StakeEngine.sol:967"
     },
     {
       "check": "divide-before-multiply",
@@ -861,7 +861,7 @@
       "element": "_projectLotValue",
       "fingerprint": "ea7d30779fe16e19",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:854"
+      "location": "src/StakeEngine.sol:967"
     },
     {
       "check": "unused-state",
@@ -893,7 +893,7 @@
       "element": "_projectSideTotal",
       "fingerprint": "fa189611f576492b",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:821"
+      "location": "src/StakeEngine.sol:934"
     },
     {
       "check": "timestamp",
@@ -901,7 +901,7 @@
       "element": "_settleBucket",
       "fingerprint": "fabc5d90b8bd34ae",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1325"
+      "location": "src/StakeEngine.sol:1470"
     },
     {
       "check": "missing-zero-check",
@@ -920,7 +920,7 @@
       "location": "src/VSPToken.sol:193"
     }
   ],
-  "generated_utc": "2026-08-30T16:30:59.451623+00:00",
+  "generated_utc": "2026-09-09T06:26:27.179771+00:00",
   "scope": "src (excludes lib,test,script)",
   "total": 114
 }

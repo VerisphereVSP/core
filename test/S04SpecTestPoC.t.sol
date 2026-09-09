@@ -65,12 +65,47 @@ contract S04SpecTestPoC is Test {
     }
 
     /// Q1: does a LIVE whale keep suppressing forever, i.e. does decay ever help?
+
+    /// ruling 3b (2026-09-08): sMax registers a post's total at its first REAL
+    /// settlement. Epoch 0 is the engine's "never snapshotted" sentinel, so a
+    /// test that starts at timestamp 1 needs two boundary crossings: the first
+    /// initializes, the second settles. Decay expectations are relative warps.
+    function _reg(uint256 pid) internal {
+        uint256[] memory one = new uint256[](1);
+        one[0] = pid;
+        _regMany(one);
+    }
+
+    function _regMany(uint256[] memory pids) internal {
+        for (uint256 k = 0; k < 2; k++) {
+            vm.warp((block.timestamp / 1 days + 1) * 1 days);
+            for (uint256 i = 0; i < pids.length; i++) {
+                eng.updatePost(pids[i]);
+            }
+        }
+    }
+
+    function _two(uint256 a, uint256 b) internal pure returns (uint256[] memory r) {
+        r = new uint256[](2);
+        r[0] = a;
+        r[1] = b;
+    }
+
+    function _four(uint256 a, uint256 b, uint256 c, uint256 d) internal pure returns (uint256[] memory r) {
+        r = new uint256[](4);
+        r[0] = a;
+        r[1] = b;
+        r[2] = c;
+        r[3] = d;
+    }
+
     function test_Q1_LiveWhaleSuppressionIsPermanent() public {
         _fresh();
         _stake(victimA, VICTIM, 0, 100e18);
         _stake(victimB, VICTIM, 1, 1);
         _stake(whale, WHALE_POST, 0, 1_000_000e18);
         _stake(address(0xDEAD), WHALE_POST, 1, 1);
+        _regMany(_two(VICTIM, WHALE_POST));
 
         emit log_named_uint("sMax with live whale", eng.sMax());
 
@@ -132,7 +167,11 @@ contract S04SpecTestPoC is Test {
         // BOUNDED, TRANSIENT suppression that anyone can burn down by poking
         // refreshSMax each epoch. Assert the full arc: suppression exists,
         // decay+poke clears it, and the recovered rate matches the clean rate.
-        assertLt(afterExitGrowth, cleanGrowth, "transient suppression expected under never-snap-down");
+        assertGe(
+            afterExitGrowth,
+            cleanGrowth,
+            "3b: a whale that exits inside the epoch never registers in sMax, so it suppresses nothing"
+        );
 
         // burn the peak down: three 30-epoch decay windows (capped per call).
         for (uint256 k = 0; k < 3; k++) {

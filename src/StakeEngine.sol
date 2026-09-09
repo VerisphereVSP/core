@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IVSPToken.sol";
 import "./interfaces/IProtocolPolicy.sol";
@@ -231,6 +232,31 @@ contract StakeEngine is GovernedUpgradeable {
     /// gated by deployment verification, not by the contract.
     address public postRegistry;
 
+    /// Economics rulings 2026-09-08 (founder), storage APPENDED (gap 498 -> 495):
+    ///  posOffset:      capital-weighted top-ups (ruling 1c). A ranked lot's
+    ///                  weightedPosition = natural midpoint + posOffset, where the
+    ///                  offset is the amount-weighted average of each tranche's
+    ///                  ENTRY midpoint minus the natural midpoint. A late top-up
+    ///                  therefore earns as if it had queued at the tail, while the
+    ///                  original tranche keeps its earliness. Drift note: when
+    ///                  capital ahead withdraws, the blended lot moves up as one
+    ///                  (bounded by the earliest tranche's share); on partial
+    ///                  withdraw the offset scales with the remaining amount.
+    ///  entryTime:      pro-rating (ruling 2b). A lot's gains AND losses for a
+    ///                  settlement window are scaled by the fraction of the
+    ///                  window it was present: f = clamp((windowEnd - entryTime)
+    ///                  / windowLen, 0, 1). On top-up the entry time becomes the
+    ///                  amount-weighted average of old entry and now — the same
+    ///                  capital-weighting as posOffset, so parking dust early and
+    ///                  topping up at the boundary ages the lot to seconds. The
+    ///                  pooled tail bucket (stakers below the top 100 by size) has
+    ///                  no per-entry data and is not prorated — documented residual.
+    ///  settledTotal:   sMax tracks last-SETTLED post totals (ruling 3b), so a
+    ///                  stake-and-withdraw inside one epoch never registers.
+    mapping(uint256 => mapping(uint8 => mapping(address => uint256))) public posOffset;
+    mapping(uint256 => mapping(uint8 => mapping(address => uint256))) public entryTime;
+    mapping(uint256 => uint256) public settledTotal;
+
     event PostRegistrySet(address indexed oldRegistry, address indexed newRegistry);
     error InvalidPostId(uint256 postId);
     error InvalidPostRegistry(address registry);
@@ -406,7 +432,7 @@ contract StakeEngine is GovernedUpgradeable {
         }
 
         // Recompute positions after swap-and-pop changes array layout
-        _recomputeWeightedPositions(q);
+        _recomputeWeightedPositions(postId, side, q);
 
         emit LotsCompacted(postId, side, removed);
     }
@@ -450,7 +476,7 @@ contract StakeEngine is GovernedUpgradeable {
         if (snapshotEpoch == 0 || currentEpoch <= snapshotEpoch) {
             return lot.amount;
         }
-        return _projectLotValue(ps, lot, currentEpoch);
+        return _projectLotValue(postId, ps, lot, currentEpoch);
     }
 
     /// @dev patch_prC_rulings S-11: entryEpoch dropped from the tuple (field removed).
@@ -476,7 +502,7 @@ contract StakeEngine is GovernedUpgradeable {
         uint256 currentEpoch = _currentEpoch();
         uint256 projectedAmount = lot.amount;
         if (ps.lastSnapshotEpoch > 0 && currentEpoch > ps.lastSnapshotEpoch) {
-            projectedAmount = _projectLotValue(ps, lot, currentEpoch);
+            projectedAmount = _projectLotValue(postId, ps, lot, currentEpoch);
         }
 
         sideTotal = ps.sides[side].total;
@@ -560,8 +586,7 @@ contract StakeEngine is GovernedUpgradeable {
             revert NotEnoughStake();
         }
         uint256 removed = _decreaseUser(postId, side, amount, _msgSender());
-        uint256 TT = ps.sides[0].total + ps.sides[1].total;
-        _updateSMax(postId, TT);
+        _updateSMax(postId, settledTotal[postId]); // ruling 3b: settled, not live
         require(ERC20_TOKEN.transfer(_msgSender(), removed), "VSP transfer failed");
         emit StakeWithdrawn(postId, _msgSender(), side, removed, true);
     }
@@ -639,8 +664,7 @@ contract StakeEngine is GovernedUpgradeable {
             }
         }
 
-        uint256 TT = ps.sides[0].total + ps.sides[1].total;
-        _updateSMax(postId, TT);
+        _updateSMax(postId, settledTotal[postId]); // ruling 3b: settled, not live
     }
 
     /// @dev Withdraw helper for setStake (no reentrancy guard - caller is guarded)
@@ -689,6 +713,13 @@ contract StakeEngine is GovernedUpgradeable {
         uint256 A = qs.total;
         uint256 D = qc.total;
         uint256 T = A + D;
+        // ruling 3b: capital present AT settlement registers at settlement (and
+        // participates in it); capital that came and went inside the window
+        // never survives to this line, so it never registers in sMax.
+        // (T == 0 registers too: a fully-withdrawn post must drop out of the
+        // tracker so the decay floor can fall — S-03 "floored at tracked leader".)
+        settledTotal[postId] = T;
+        _updateSMax(postId, T);
 
         if (T == 0 || sMax == 0) {
             ps.lastSnapshotEpoch = currentEpoch;
@@ -727,8 +758,10 @@ contract StakeEngine is GovernedUpgradeable {
         // safely clamped to zero weight inside _applyEpoch; midpoint
         // recomputation after every mutation keeps positions < total, so the
         // clamp is a safety net rather than a working path — S-12).
-        (uint256 mintS, uint256 burnS) = _applyEpoch(qs, supportWins, true, rBase);
-        (uint256 mintC, uint256 burnC) = _applyEpoch(qc, supportWins, false, rBase);
+        uint256 wStart = lastEpoch * EPOCH_LENGTH;
+        uint256 wEnd = currentEpoch * EPOCH_LENGTH;
+        (uint256 mintS, uint256 burnS) = _applyEpochFor(postId, 0, wStart, wEnd, qs, supportWins, true, rBase);
+        (uint256 mintC, uint256 burnC) = _applyEpochFor(postId, 1, wStart, wEnd, qc, supportWins, false, rBase);
 
         if (mintS + mintC > 0) {
             VSP_TOKEN.mint(address(this), mintS + mintC);
@@ -742,13 +775,14 @@ contract StakeEngine is GovernedUpgradeable {
         // Recompute totals and midpoint positions after mints/burns
         _recomputeSideTotal(qs);
         _recomputeSideTotal(qc);
-        _recomputeWeightedPositions(qs);
-        _recomputeWeightedPositions(qc);
+        _recomputeWeightedPositions(postId, 0, qs);
+        _recomputeWeightedPositions(postId, 1, qc);
+
+        settledTotal[postId] = qs.total + qc.total; // post-mint/burn totals
 
         ps.lastSnapshotEpoch = currentEpoch;
 
-        uint256 TT = qs.total + qc.total;
-        _updateSMax(postId, TT);
+        _updateSMax(postId, settledTotal[postId]); // just settled above
 
         emit PostUpdated(postId, currentEpoch, qs.total, qc.total);
     }
@@ -765,6 +799,22 @@ contract StakeEngine is GovernedUpgradeable {
         internal
         returns (uint256 minted, uint256 burned)
     {
+        return _applyEpochFor(0, 0, 0, 0, q, supportWins, isSupportSide, rBase);
+    }
+
+    /// @dev ruling 2b: each lot's delta (gain or loss) is scaled by the share of
+    ///      the settlement window [windowStart, windowEnd) it was present for.
+    ///      windowLen == 0 (legacy caller) means "no proration".
+    function _applyEpochFor(
+        uint256 postId,
+        uint8 side,
+        uint256 windowStart,
+        uint256 windowEnd,
+        SideQueue storage q,
+        bool supportWins,
+        bool isSupportSide,
+        uint256 rBase
+    ) internal returns (uint256 minted, uint256 burned) {
         if (q.total == 0 || rBase == 0 || sMax == 0) {
             return (0, 0);
         }
@@ -782,9 +832,18 @@ contract StakeEngine is GovernedUpgradeable {
             if (midpointRate > RAY) {
                 midpointRate = RAY;
             }
-            // delta = amount * rBase * midpointRate / RAY
-            uint256 delta = (lot.amount * rBase * midpointRate) / (RAY * RAY);
-            if (delta == 0) {
+            // delta = amount * rBase * midpointRate / RAY (512-bit intermediate,
+            // single rounding), then prorated by presence with a second exact
+            // mulDiv — no divide-before-multiply, no timestamp equality.
+            uint256 delta = Math.mulDiv(lot.amount * rBase, midpointRate, RAY * RAY);
+            if (windowEnd > windowStart) {
+                uint256 et = entryTime[postId][side][lot.staker];
+                if (et > windowStart) {
+                    uint256 present = et < windowEnd ? windowEnd - et : 0;
+                    delta = Math.mulDiv(delta, present, windowEnd - windowStart);
+                }
+            }
+            if (delta < 1) {
                 continue;
             }
             if (aligned) {
@@ -841,7 +900,7 @@ contract StakeEngine is GovernedUpgradeable {
         uint256 A = qs.total;
         uint256 D = qc.total;
         uint256 T = A + D;
-        if (T == 0 || sMax == 0) {
+        if (T == 0) {
             return (A, D);
         }
         int256 vsNum = int256(2 * A) - int256(T);
@@ -855,8 +914,10 @@ contract StakeEngine is GovernedUpgradeable {
         // view must too, otherwise V.8 (view == materialised) breaks whenever
         // topPosts is empty and the decay fallback is live.
         uint256 projSMax = sMax;
-        if (projSMax == 0) {
-            return (A, D);
+        // ruling 3b: settlement registers T into sMax BEFORE applying the epoch,
+        // so the projection floors sMax at T (and never bails on sMax == 0).
+        if (projSMax < T) {
+            projSMax = T;
         }
         uint256 vRay = (absVS * RAY) / T;
         uint256 participationRay = (T * RAY) / projSMax;
@@ -903,7 +964,7 @@ contract StakeEngine is GovernedUpgradeable {
         total += _projectBucket(q, aligned, rBase); // patch_h1a_bucket
     }
 
-    function _projectLotValue(PostState storage ps, StakeLot storage lot, uint256 currentEpoch)
+    function _projectLotValue(uint256 postId, PostState storage ps, StakeLot storage lot, uint256 currentEpoch)
         internal
         view
         returns (uint256)
@@ -913,7 +974,7 @@ contract StakeEngine is GovernedUpgradeable {
         uint256 A = qs.total;
         uint256 D = qc.total;
         uint256 T = A + D;
-        if (T == 0 || sMax == 0) {
+        if (T == 0) {
             return lot.amount;
         }
         int256 vsNum = int256(2 * A) - int256(T);
@@ -927,8 +988,10 @@ contract StakeEngine is GovernedUpgradeable {
         uint256 epochsElapsed = currentEpoch - ps.lastSnapshotEpoch;
         // S-10 FIX (second site): same reasoning as _projectTotals.
         uint256 projSMax = sMax;
-        if (projSMax == 0) {
-            return lot.amount;
+        // ruling 3b: settlement registers T into sMax BEFORE applying the epoch,
+        // so the projection floors sMax at T (and never bails on sMax == 0).
+        if (projSMax < T) {
+            projSMax = T;
         }
         uint256 vRay = (absVS * RAY) / T;
         uint256 participationRay = (T * RAY) / projSMax;
@@ -951,6 +1014,17 @@ contract StakeEngine is GovernedUpgradeable {
             midpointRate = RAY;
         }
         uint256 delta = (lot.amount * rBase * midpointRate) / (RAY * RAY);
+        // ruling 2b: mirror the settlement's presence proration so the view
+        // matches what will materialise (S-10 view/materialised invariant).
+        {
+            uint256 wStart = ps.lastSnapshotEpoch * EPOCH_LENGTH;
+            uint256 wEnd = currentEpoch * EPOCH_LENGTH;
+            uint256 et = entryTime[postId][lot.side][lot.staker];
+            if (wEnd > wStart && et > wStart) {
+                uint256 present = et < wEnd ? wEnd - et : 0;
+                delta = Math.mulDiv(delta, present, wEnd - wStart);
+            }
+        }
         if (aligned) {
             return lot.amount + delta;
         } else {
@@ -1038,7 +1112,7 @@ contract StakeEngine is GovernedUpgradeable {
     function refreshSMax(uint256 postId) external nonReentrant {
         _maybeSnapshot(postId, _currentEpoch());
         PostState storage ps = posts[postId];
-        uint256 total = ps.sides[0].total + ps.sides[1].total;
+        uint256 total = settledTotal[postId]; // ruling 3b: settled, not live
         _updateSMax(postId, total);
         emit SMaxRefreshed(postId, total, sMax);
     }
@@ -1071,7 +1145,7 @@ contract StakeEngine is GovernedUpgradeable {
         for (uint256 i = 0; i < postIds.length; i++) {
             uint256 pid = postIds[i];
             PostState storage ps = posts[pid];
-            uint256 total = ps.sides[0].total + ps.sides[1].total;
+            uint256 total = settledTotal[pid]; // ruling 3b: settled, not live
             if (total == 0) {
                 continue;
             }
@@ -1260,6 +1334,14 @@ contract StakeEngine is GovernedUpgradeable {
     function _increaseUser(uint256 postId, uint8 side, uint256 amount, address user) internal {
         PostState storage ps = posts[postId];
         SideQueue storage q = ps.sides[side];
+        // ruling 2b: entry time is amount-weighted across tranches, so capital
+        // added at a boundary ages the lot toward "now" in proportion to its size.
+        {
+            uint256 prev = _userAmount(ps, side, user);
+            uint256 et = entryTime[postId][side][user];
+            entryTime[postId][side][user] =
+                (prev == 0 || et == 0) ? block.timestamp : (prev * et + amount * block.timestamp) / (prev + amount);
+        }
 
         uint256 idx = _getLotIndex(ps, user, side);
         if (idx != 0) {
@@ -1288,7 +1370,19 @@ contract StakeEngine is GovernedUpgradeable {
                     }
                 }
             } else {
-                q.lots[idx - 1].amount += amount; // existing ranked staker
+                // ruling 1c: capital-weighted position. New capital enters at
+                // the tail midpoint (T_now + amount/2); the lot's position
+                // becomes the amount-weighted average of old and new entries.
+                StakeLot storage lot = q.lots[idx - 1];
+                uint256 oldAmt = lot.amount;
+                uint256 tailEntry = q.total + amount / 2;
+                uint256 blended = (oldAmt * lot.weightedPosition + amount * tailEntry) / (oldAmt + amount);
+                uint256 natural =
+                    (lot.weightedPosition > posOffset[postId][side][user]
+                                ? lot.weightedPosition - posOffset[postId][side][user]
+                                : 0) + amount / 2; // natural midpoint after growth: cumBefore + newAmt/2
+                posOffset[postId][side][user] = blended > natural ? blended - natural : 0;
+                lot.amount += amount; // existing ranked staker
             }
         } else if (_getBucketShares(ps, user, side) != 0) {
             _bucketAdd(ps, q, side, user, amount); // existing bucket member (may promote via _rebalance)
@@ -1304,10 +1398,9 @@ contract StakeEngine is GovernedUpgradeable {
             }
         }
         _rebalance(postId, ps, q, side); // patch_h1b_promotion: keep ranked = the C largest
-        _recomputeWeightedPositions(q);
+        _recomputeWeightedPositions(postId, side, q);
         _recomputeSideTotal(q); // exact side total (ranked + bucketLive)
-        uint256 tt = ps.sides[0].total + ps.sides[1].total;
-        _updateSMax(postId, tt);
+        _updateSMax(postId, settledTotal[postId]); // ruling 3b: settled, not live
     }
 
     /// @dev Decrease a user's position by up to `amount`. Returns value removed.
@@ -1327,7 +1420,7 @@ contract StakeEngine is GovernedUpgradeable {
             removed = _bucketRemove(ps, q, side, user, amount);
         }
         _rebalance(postId, ps, q, side); // patch_h1b_promotion: fill freed slots / swap boundary
-        _recomputeWeightedPositions(q);
+        _recomputeWeightedPositions(postId, side, q);
         _recomputeSideTotal(q); // exact side total (ranked + bucketLive)
     }
 
@@ -1560,14 +1653,27 @@ contract StakeEngine is GovernedUpgradeable {
         }
     }
 
-    function _recomputeWeightedPositions(SideQueue storage q) internal {
+    function _recomputeWeightedPositions(uint256 postId, uint8 side, SideQueue storage q) internal {
         uint256 cumulative = 0;
+        uint256 T = 0;
         for (uint256 i = 0; i < q.lots.length; i++) {
-            if (q.lots[i].amount == 0) {
+            T += q.lots[i].amount;
+        }
+        for (uint256 i = 0; i < q.lots.length; i++) {
+            uint256 a = q.lots[i].amount;
+            if (a == 0) {
                 continue;
             }
-            q.lots[i].weightedPosition = cumulative + q.lots[i].amount / 2;
-            cumulative += q.lots[i].amount;
+            uint256 natural = cumulative + a / 2;
+            uint256 off = posOffset[postId][side][q.lots[i].staker];
+            uint256 wp = natural + off;
+            // a blended position can never be behind the tail of the side
+            uint256 tailMid = T > a / 2 ? T - a / 2 : 0;
+            if (wp > tailMid) {
+                wp = tailMid;
+            }
+            q.lots[i].weightedPosition = wp;
+            cumulative += a;
         }
     }
 
@@ -1579,7 +1685,7 @@ contract StakeEngine is GovernedUpgradeable {
         q.total = total + _bucketLive(q); // patch_h1a_bucket
     }
 
-    uint256[498] private __gap; // 499 -> 498: one slot consumed by postRegistry (H1)
+    uint256[495] private __gap; // 499 -> 498 (postRegistry) -> 495 (posOffset, entryTime, settledTotal)
 }
 
 /// @dev Minimal read surface the engine needs from PostRegistry (H1).

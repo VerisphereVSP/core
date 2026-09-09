@@ -359,6 +359,11 @@ contract PostRegistry is GovernedUpgradeable {
         for (uint256 i = 0; i < j; i++) {
             result[i] = buf[i];
         }
+        // ruling 4b (security review Low): a claim that normalizes to nothing
+        // (whitespace-only) is not a claim.
+        if (j == 0) {
+            revert InvalidClaim();
+        }
         return keccak256(result);
     }
 

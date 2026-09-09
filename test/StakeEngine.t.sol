@@ -62,6 +62,39 @@ contract StakeEngineTest is Test {
     /// Basic stake / withdraw behavior
     /// ------------------------------------------------------------
 
+    /// ruling 3b (2026-09-08): sMax registers a post's total at its first REAL
+    /// settlement. Epoch 0 is the engine's "never snapshotted" sentinel, so a
+    /// test that starts at timestamp 1 needs two boundary crossings: the first
+    /// initializes, the second settles. Decay expectations are relative warps.
+    function _reg(uint256 pid) internal {
+        uint256[] memory one = new uint256[](1);
+        one[0] = pid;
+        _regMany(one);
+    }
+
+    function _regMany(uint256[] memory pids) internal {
+        for (uint256 k = 0; k < 2; k++) {
+            vm.warp((block.timestamp / 1 days + 1) * 1 days);
+            for (uint256 i = 0; i < pids.length; i++) {
+                engine.updatePost(pids[i]);
+            }
+        }
+    }
+
+    function _two(uint256 a, uint256 b) internal pure returns (uint256[] memory r) {
+        r = new uint256[](2);
+        r[0] = a;
+        r[1] = b;
+    }
+
+    function _four(uint256 a, uint256 b, uint256 c, uint256 d) internal pure returns (uint256[] memory r) {
+        r = new uint256[](4);
+        r[0] = a;
+        r[1] = b;
+        r[2] = c;
+        r[3] = d;
+    }
+
     function testStakeIncreasesTotals() public {
         vm.prank(alice);
         engine.stake(postA, 0, 100 ether);
@@ -247,6 +280,7 @@ contract StakeEngineTest is Test {
         engine.updatePost(postA);
 
         engine.stake(postB, 0, 300 ether);
+        _reg(postB);
         assertGe(engine.sMax(), 300 ether);
     }
 
