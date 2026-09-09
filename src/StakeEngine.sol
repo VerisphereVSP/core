@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IVSPToken.sol";
 import "./interfaces/IProtocolPolicy.sol";
@@ -831,16 +832,18 @@ contract StakeEngine is GovernedUpgradeable {
             if (midpointRate > RAY) {
                 midpointRate = RAY;
             }
-            // delta = amount * rBase * midpointRate / RAY, then prorated by presence
-            uint256 delta = (lot.amount * rBase * midpointRate) / (RAY * RAY);
+            // delta = amount * rBase * midpointRate / RAY (512-bit intermediate,
+            // single rounding), then prorated by presence with a second exact
+            // mulDiv — no divide-before-multiply, no timestamp equality.
+            uint256 delta = Math.mulDiv(lot.amount * rBase, midpointRate, RAY * RAY);
             if (windowEnd > windowStart) {
                 uint256 et = entryTime[postId][side][lot.staker];
                 if (et > windowStart) {
                     uint256 present = et < windowEnd ? windowEnd - et : 0;
-                    delta = (delta * present) / (windowEnd - windowStart);
+                    delta = Math.mulDiv(delta, present, windowEnd - windowStart);
                 }
             }
-            if (delta == 0) {
+            if (delta < 1) {
                 continue;
             }
             if (aligned) {
@@ -1019,7 +1022,7 @@ contract StakeEngine is GovernedUpgradeable {
             uint256 et = entryTime[postId][lot.side][lot.staker];
             if (wEnd > wStart && et > wStart) {
                 uint256 present = et < wEnd ? wEnd - et : 0;
-                delta = (delta * present) / (wEnd - wStart);
+                delta = Math.mulDiv(delta, present, wEnd - wStart);
             }
         }
         if (aligned) {
