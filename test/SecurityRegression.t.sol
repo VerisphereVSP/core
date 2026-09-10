@@ -154,4 +154,14 @@ contract SecurityRegression is Test {
         vm.expectRevert(StakeEngine.WhenPaused.selector);
         eng.setStake(pid, 1e18); // but no new exposure while paused
     }
+
+    function test_R3_edgeLimitsHaveAbsoluteCeilings() public {
+        uint256 maxIn = score.ABSOLUTE_MAX_INCOMING();
+        uint256 maxOut = score.ABSOLUTE_MAX_OUTGOING();
+        score.setEdgeLimits(maxIn, maxOut); // at the ceiling: fine
+        vm.expectRevert();
+        score.setEdgeLimits(maxIn + 1, 64);
+        vm.expectRevert();
+        score.setEdgeLimits(64, maxOut + 1);
+    }
 }
