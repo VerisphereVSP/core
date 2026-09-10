@@ -142,8 +142,17 @@ contract ScoreEngine is GovernedUpgradeable {
 
     /// @notice Set the maximum number of edges processed in VS computation.
     ///         Governance-only. Values of 0 are rejected.
+    /// Review 3 (2026-09-10) #6: governance may tune the traversal bounds but
+    /// never disable them. Ceilings equal LinkGraph's structural per-claim
+    /// limits (1000), the most any traversal could ever have to visit.
+    uint256 public constant ABSOLUTE_MAX_INCOMING = 1000;
+    uint256 public constant ABSOLUTE_MAX_OUTGOING = 1000;
+
     function setEdgeLimits(uint256 maxIncoming_, uint256 maxOutgoing_) external onlyGovernance {
         if (maxIncoming_ == 0 || maxOutgoing_ == 0) {
+            revert InvalidEdgeLimit();
+        }
+        if (maxIncoming_ > ABSOLUTE_MAX_INCOMING || maxOutgoing_ > ABSOLUTE_MAX_OUTGOING) {
             revert InvalidEdgeLimit();
         }
         maxIncomingEdges = maxIncoming_;
