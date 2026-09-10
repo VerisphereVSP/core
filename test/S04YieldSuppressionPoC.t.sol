@@ -71,7 +71,7 @@ contract S04YieldSuppressionPoC is Test {
             _stake(whale, WHALE_POST, 0, whaleAmt);
             _stake(address(0xDEAD), WHALE_POST, 1, 1);
             // ruling 3b: a post registers in sMax at ITS first settlement
-            vm.warp((block.timestamp / 1 days + 1) * 1 days);
+            vm.warp((vm.getBlockTimestamp() / 1 days + 1) * 1 days); // cheatcode read: via_ir caches block.timestamp across warps
             eng.updatePost(WHALE_POST);
             eng.updatePost(VICTIM_POST);
         }

@@ -67,7 +67,7 @@ contract PrCRegressions is Test {
 
     function _regMany(uint256[] memory pids) internal {
         for (uint256 k = 0; k < 2; k++) {
-            vm.warp((block.timestamp / 1 days + 1) * 1 days);
+            vm.warp((vm.getBlockTimestamp() / 1 days + 1) * 1 days); // cheatcode read: via_ir caches block.timestamp across warps
             for (uint256 i = 0; i < pids.length; i++) {
                 eng.updatePost(pids[i]);
             }
@@ -102,14 +102,10 @@ contract PrCRegressions is Test {
     }
 
     function test_S03_DecayIsSoleDescent_FlooredAtTrackedLeader() public {
-        // TODO(ruling 3b, tracked in ROLLOUT-CHECKLIST): under settled-total sMax the
-        // decay reference epoch / harness registration in this test must be
-        // re-derived. The invariant is still covered by the passing S-03 suite.
-        vm.skip(true);
-
         _stake(address(0xA1), 1, 0, 300e18);
         _stake(address(0xA2), 2, 0, 100e18);
         _regMany(_two(1, 2));
+        uint256 hwBefore = eng.sMax(); // registered (settled) high-water, BEFORE any decay
         vm.prank(address(0xA1));
         eng.withdraw(1, 0, 300e18, true);
 
@@ -118,14 +114,7 @@ contract PrCRegressions is Test {
         vm.warp(vm.getBlockTimestamp() + 5 days);
         eng.refreshSMax(1); // ruling 3b: the leader's exit registers at ITS next settlement
         eng.refreshSMax(2);
-        // ruling 3b: decay from the REGISTERED (settled) value, over the epochs
-        // the engine itself counts since its last sMax update (the invariant is
-        // "descent is exactly the decay curve", not a hard-coded 5).
-        uint256 expect5 = eng.sMax();
-        uint256 epochsSince = block.timestamp / 1 days - eng.sMaxLastUpdatedEpoch();
-        for (uint256 e = 5; e < epochsSince; e++) {
-            expect5 = (expect5 * 9e17) / RAY;
-        }
+        uint256 expect5 = hwBefore; // ruling 3b: decay from the REGISTERED (settled) value
         for (uint256 i = 0; i < 5; i++) {
             expect5 = (expect5 * 9e17) / RAY;
         }

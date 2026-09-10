@@ -66,7 +66,7 @@ contract StakeEngineFuzzTest is Test {
 
     function _regMany(uint256[] memory pids) internal {
         for (uint256 k = 0; k < 2; k++) {
-            vm.warp((block.timestamp / 1 days + 1) * 1 days);
+            vm.warp((vm.getBlockTimestamp() / 1 days + 1) * 1 days); // cheatcode read: via_ir caches block.timestamp across warps
             for (uint256 i = 0; i < pids.length; i++) {
                 engine.updatePost(pids[i]);
             }
@@ -226,11 +226,6 @@ contract StakeEngineFuzzTest is Test {
 
     /// @notice sMax must decay over time when no new stakes exceed it.
     function testFuzz_SMaxDecays(uint128 stakeAmt, uint16 daysElapsed) public {
-        // TODO(ruling 3b, tracked in ROLLOUT-CHECKLIST): under settled-total sMax the
-        // decay reference epoch / harness registration in this test must be
-        // re-derived. The invariant is still covered by the passing S-03 suite.
-        vm.skip(true);
-
         uint256 amt = bound(uint256(stakeAmt), 1e18, 1e24); // bundle05_a
         uint256 days_ = bound(uint256(daysElapsed), 1, 3650);
 

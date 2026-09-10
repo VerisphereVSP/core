@@ -74,7 +74,7 @@ contract StakeEngineTest is Test {
 
     function _regMany(uint256[] memory pids) internal {
         for (uint256 k = 0; k < 2; k++) {
-            vm.warp((block.timestamp / 1 days + 1) * 1 days);
+            vm.warp((vm.getBlockTimestamp() / 1 days + 1) * 1 days); // cheatcode read: via_ir caches block.timestamp across warps
             for (uint256 i = 0; i < pids.length; i++) {
                 engine.updatePost(pids[i]);
             }
