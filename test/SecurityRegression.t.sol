@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
+import "../src/authority/Authority.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 import "../src/PostRegistry.sol";
@@ -163,5 +164,17 @@ contract SecurityRegression is Test {
         score.setEdgeLimits(maxIn + 1, 64);
         vm.expectRevert();
         score.setEdgeLimits(64, maxOut + 1);
+    }
+
+    function test_Sweep_acceptOwnerRevokesOldOwnerRoles() public {
+        Authority a = new Authority(address(this));
+        assertTrue(a.isMinter(address(this)) && a.isBurner(address(this)));
+        address next = address(0xA11CE);
+        a.proposeOwner(next);
+        vm.prank(next);
+        a.acceptOwner();
+        assertEq(a.owner(), next);
+        assertFalse(a.isMinter(address(this)), "old owner minter role revoked on handoff");
+        assertFalse(a.isBurner(address(this)), "old owner burner role revoked on handoff");
     }
 }

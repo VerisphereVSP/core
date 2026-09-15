@@ -64,6 +64,17 @@ contract Authority {
         address oldOwner = owner;
         owner = msg.sender;
         pendingOwner = address(0);
+        // Housekeeping sweep 2026-09-13 (security review Low): the old owner's
+        // operational roles do not survive the handoff. Deploy.s.sol already
+        // revoked the deployer explicitly; the contract now guarantees it.
+        if (isMinter[oldOwner]) {
+            isMinter[oldOwner] = false;
+            emit MinterSet(oldOwner, false);
+        }
+        if (isBurner[oldOwner]) {
+            isBurner[oldOwner] = false;
+            emit BurnerSet(oldOwner, false);
+        }
         emit OwnerChanged(msg.sender);
     }
 
