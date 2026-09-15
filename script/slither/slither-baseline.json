@@ -2,7 +2,7 @@
   "by_impact": {
     "High": 0,
     "Informational": 44,
-    "Low": 36,
+    "Low": 38,
     "Medium": 32,
     "Optimization": 2
   },
@@ -117,7 +117,7 @@
       "element": "_computeEdgeContribution",
       "fingerprint": "1206027770ad6630",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:338"
+      "location": "src/ScoreEngine.sol:353"
     },
     {
       "check": "incorrect-equality",
@@ -213,7 +213,7 @@
       "element": "_sumOutgoingLinkStake",
       "fingerprint": "2abbe92ae2e04029",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:490"
+      "location": "src/ScoreEngine.sol:505"
     },
     {
       "check": "naming-convention",
@@ -525,7 +525,7 @@
       "element": "__gap",
       "fingerprint": "842162b5e84eabbe",
       "impact": "Informational",
-      "location": "src/ScoreEngine.sol:557"
+      "location": "src/ScoreEngine.sol:572"
     },
     {
       "check": "naming-convention",
@@ -597,7 +597,7 @@
       "element": "baseVSRay",
       "fingerprint": "90d80adac0444654",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:168"
+      "location": "src/ScoreEngine.sol:177"
     },
     {
       "check": "naming-convention",
@@ -629,7 +629,7 @@
       "element": "_totalStake",
       "fingerprint": "9876bff9ff28860a",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:468"
+      "location": "src/ScoreEngine.sol:483"
     },
     {
       "check": "unused-state",
@@ -718,6 +718,22 @@
       "fingerprint": "b88697b729a64383",
       "impact": "Informational",
       "location": "src/interfaces/IStakeEngine.sol:6"
+    },
+    {
+      "check": "calls-loop",
+      "confidence": "Medium",
+      "element": "_sumIncomingContributions",
+      "fingerprint": "be72e39e630fc832",
+      "impact": "Low",
+      "location": "src/ScoreEngine.sol:283"
+    },
+    {
+      "check": "calls-loop",
+      "confidence": "Medium",
+      "element": "_sumIncomingContributions",
+      "fingerprint": "be72e39e630fc832",
+      "impact": "Low",
+      "location": "src/ScoreEngine.sol:283"
     },
     {
       "check": "naming-convention",
@@ -869,7 +885,7 @@
       "element": "__gap",
       "fingerprint": "f0771cd3f859467b",
       "impact": "Informational",
-      "location": "src/ScoreEngine.sol:557"
+      "location": "src/ScoreEngine.sol:572"
     },
     {
       "check": "calls-loop",
@@ -877,7 +893,7 @@
       "element": "_computeEdgeContribution",
       "fingerprint": "f368c5e72b16dab0",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:338"
+      "location": "src/ScoreEngine.sol:353"
     },
     {
       "check": "calls-loop",
@@ -885,7 +901,7 @@
       "element": "_computeEdgeContribution",
       "fingerprint": "f368c5e72b16dab0",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:338"
+      "location": "src/ScoreEngine.sol:353"
     },
     {
       "check": "divide-before-multiply",
@@ -920,7 +936,7 @@
       "location": "src/VSPToken.sol:193"
     }
   ],
-  "generated_utc": "2026-09-09T06:26:27.179771+00:00",
+  "generated_utc": "2026-09-15T12:29:58.374403+00:00",
   "scope": "src (excludes lib,test,script)",
-  "total": 114
+  "total": 116
 }
