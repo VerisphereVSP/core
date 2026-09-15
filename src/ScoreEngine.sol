@@ -295,7 +295,13 @@ contract ScoreEngine is GovernedUpgradeable {
         if (maxIn > 0 && n > maxIn) {
             uint256[] memory stakes = new uint256[](n);
             for (uint256 i = 0; i < n; i++) {
-                stakes[i] = _totalStake(inc[i].linkPostId);
+                // R2-H (second-scope review, Low): rank by link stake ONLY for
+                // links that can contribute. A link whose parent claim is
+                // inactive contributes exactly zero, so it must not occupy one
+                // of the bounded slots and displace honest evidence. Such links
+                // sort to the bottom (key 0) and fall outside the cap.
+                stakes[i] =
+                    protocolPolicy.isActive(_totalStake(inc[i].fromClaimPostId)) ? _totalStake(inc[i].linkPostId) : 0;
             }
             // Insertion sort (view call, no gas limit; n typically < 200)
             for (uint256 i = 1; i < n; i++) {

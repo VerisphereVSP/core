@@ -177,4 +177,29 @@ contract SecurityRegression is Test {
         assertFalse(a.isMinter(address(this)), "old owner minter role revoked on handoff");
         assertFalse(a.isBurner(address(this)), "old owner burner role revoked on handoff");
     }
+
+    function test_R2H_inactiveParentLinksCannotDisplaceHonestEvidence() public {
+        // cap incoming at 2 so the displacement is cheap to construct
+        score.setEdgeLimits(2, 64);
+        uint256 target = registry.createClaim("Target claim");
+        uint256 honestParent = registry.createClaim("Honest evidence");
+        _fund(honest, 10_000e18);
+        vm.prank(honest);
+        eng.stake(honestParent, 0, 1_000e18); // parent ACTIVE
+        uint256 honestLink = registry.createLink(honestParent, target, false);
+        vm.prank(honest);
+        eng.stake(honestLink, 0, 200e18);
+        int256 before = score.effectiveVSRay(target);
+        // flood: two parents left UNSTAKED (inactive), links out-staking the honest one
+        _fund(attacker, 10_000e18);
+        for (uint256 i = 0; i < 2; i++) {
+            uint256 fp = registry.createClaim(string(abi.encodePacked("Flood parent ", i == 0 ? "A" : "B")));
+            uint256 fl = registry.createLink(fp, target, false);
+            vm.prank(attacker);
+            eng.stake(fl, 0, 300e18);
+        }
+        int256 after_ = score.effectiveVSRay(target);
+        assertEq(after_, before, "R2-H: zero-contribution flood links no longer occupy bounded slots");
+        assertGt(after_, 0, "honest evidence still counts");
+    }
 }
