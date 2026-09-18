@@ -167,7 +167,21 @@ contract PostRegistry is GovernedUpgradeable {
 
     // -------- Core write methods --------
 
-    function createClaim(string calldata text_) external whenNotPaused returns (uint256 postId) {
+    // Security review F (2026-09-18) #5: _chargeFee is an external call before the
+    // post is written. Safe with the fixed, hook-free VSP token; guarded so it stays
+    // safe if the fee asset ever changes.
+    error Reentrant();
+
+    modifier nonReentrant() {
+        if (_reentrancyStatus == 2) {
+            revert Reentrant();
+        }
+        _reentrancyStatus = 2;
+        _;
+        _reentrancyStatus = 1;
+    }
+
+    function createClaim(string calldata text_) external whenNotPaused nonReentrant returns (uint256 postId) {
         if (bytes(text_).length == 0) {
             revert InvalidClaim();
         }
@@ -227,6 +241,7 @@ contract PostRegistry is GovernedUpgradeable {
     function createLink(uint256 fromPostId, uint256 toPostId, bool isChallenge)
         external
         whenNotPaused
+        nonReentrant
         returns (uint256 postId)
     {
         if (address(linkGraph) == address(0)) {
@@ -390,7 +405,10 @@ contract PostRegistry is GovernedUpgradeable {
         return postId != 0 && postId < nextPostId;
     }
 
-    uint256[499] private __gap;
+    /// Review F #5 (2026-09-18): reentrancy flag for createClaim/createLink.
+    /// Storage APPENDED from the gap (499 -> 498); 0/1 = not entered, 2 = entered.
+    uint256 private _reentrancyStatus;
+    uint256[498] private __gap;
 
     /// @notice Replace the ProtocolPolicy address. Governance only.
     event ProtocolPolicySet(address indexed oldPolicy, address indexed newPolicy);

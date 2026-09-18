@@ -2,8 +2,8 @@
   "_meta": {
     "contract": "src/PostRegistry.sol:PostRegistry",
     "forge_version": "forge Version: 1.5.1-stable",
-    "generated_at": "2026-08-30T16:23:27Z",
-    "layout_sha256": "54702a408a0cec2bab610a395100ff95653cb59246825210f775fee149d21b07",
+    "generated_at": "2026-09-18T08:59:40Z",
+    "layout_sha256": "706f5cf3eff28d927e78beaec09e614e470d11d86e194eadc1230abea969e86b",
     "note": "Storage-layout regression baseline. Regenerate ONLY for an intended, reviewed, upgrade-safe layout change via check.sh --update.",
     "schema": 2
   },
@@ -94,10 +94,16 @@
         "type": "t_bool"
       },
       {
-        "label": "__gap",
+        "label": "_reentrancyStatus",
         "offset": 0,
         "slot": 111,
-        "type": "t_array(t_uint256)499_storage"
+        "type": "t_uint256"
+      },
+      {
+        "label": "__gap",
+        "offset": 0,
+        "slot": 112,
+        "type": "t_array(t_uint256)498_storage"
       }
     ],
     "types": {
@@ -120,10 +126,10 @@
         "encoding": "inplace",
         "numberOfBytes": "3200"
       },
-      "t_array(t_uint256)499_storage": {
+      "t_array(t_uint256)498_storage": {
         "base": "t_uint256",
         "encoding": "inplace",
-        "numberOfBytes": "15968"
+        "numberOfBytes": "15936"
       },
       "t_bool": {
         "encoding": "inplace",
