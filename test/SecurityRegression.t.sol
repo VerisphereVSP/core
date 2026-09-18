@@ -202,4 +202,26 @@ contract SecurityRegression is Test {
         assertEq(after_, before, "R2-H: zero-contribution flood links no longer occupy bounded slots");
         assertGt(after_, 0, "honest evidence still counts");
     }
+
+    // ── Review F (2026-09-18) #1: governance is NOT relayable ─────────────────
+    // A forwarder implementation that appends an arbitrary 2771 suffix must not
+    // be able to act as governance. We simulate the hostile forwarder by calling
+    // from the trusted forwarder address with the governance address appended.
+    function test_F1_governanceNotRelayable() public {
+        address fwd = eng.trustedForwarder();
+        address govAddr = eng.governance();
+        bytes memory call_ =
+            abi.encodePacked(abi.encodeWithSelector(eng.setPostRegistry.selector, address(registry)), govAddr);
+        vm.prank(fwd);
+        (bool ok, bytes memory ret) = address(eng).call(call_);
+        assertFalse(ok, "F-1: a relayed call with governance appended must be rejected");
+        assertEq(bytes4(ret), GovernedUpgradeable.NotGovernance.selector);
+        // and the same call from raw governance still works
+        eng.setPostRegistry(address(registry));
+    }
+
+    function test_G_CR4_guardianCannotBeZeroed() public {
+        vm.expectRevert(GovernedUpgradeable.ZeroAddress.selector);
+        eng.setGuardian(address(0));
+    }
 }

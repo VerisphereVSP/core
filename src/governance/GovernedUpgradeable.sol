@@ -39,8 +39,14 @@ abstract contract GovernedUpgradeable is Initializable, UUPSUpgradeable, ERC2771
         emit GovernanceSet(governance_);
     }
 
+    /// @dev Security review F (2026-09-18) #1: governance is gated on RAW
+    ///      msg.sender, never on the ERC-2771 _msgSender(). Otherwise a
+    ///      forwarder owner could upgrade the forwarder to append an arbitrary
+    ///      2771 suffix and relay upgradeToAndCall "as governance" — defeating
+    ///      the timelock with the forwarder key. Governance actions are not
+    ///      gasless actions; they must not pass through a forwarder.
     modifier onlyGovernance() {
-        if (_msgSender() != governance) {
+        if (msg.sender != governance) {
             revert NotGovernance();
         }
         _;
@@ -61,7 +67,8 @@ abstract contract GovernedUpgradeable is Initializable, UUPSUpgradeable, ERC2771
     /// @notice Accept proposed governance role. Only callable by the address
     ///         that was set as pendingGovernance via proposeGovernance().
     function acceptGovernance() external {
-        if (_msgSender() != pendingGovernance) {
+        if (msg.sender != pendingGovernance) {
+            // raw sender: see onlyGovernance
             revert NotPendingGovernance();
         }
         // patch_prC_rulings S-13: the old ZeroAddress branch here was

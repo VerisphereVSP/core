@@ -367,6 +367,9 @@ contract StakeEngine is GovernedUpgradeable {
             revert AlreadyInitializedV2();
         }
         _initializedV2 = true;
+        if (guardian_ == address(0)) {
+            revert ZeroAddress();
+        }
         guardian = guardian_;
         emit GuardianSet(address(0), guardian_);
     }
@@ -391,6 +394,9 @@ contract StakeEngine is GovernedUpgradeable {
 
     /// @notice Replace the Guardian. Governance only.
     function setGuardian(address newGuardian) external onlyGovernance {
+        if (newGuardian == address(0)) {
+            revert ZeroAddress(); // review G CR-4: a zeroed guardian disables the fast pause
+        }
         address old = guardian;
         guardian = newGuardian;
         emit GuardianSet(old, newGuardian);
