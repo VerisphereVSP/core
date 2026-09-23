@@ -14,7 +14,12 @@ import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 /// Key rules:
 ///   1. Only credible parents contribute: parentVS must be > 0.
 ///   2. Contributions are stake-weighted: parent economic mass flows through links.
-///   3. Effective VS = (directSupport + positiveContribs - directChallenge - negativeContribs) / pool.
+///   3. Effective VS = (totalSupport - totalChallenge) / pool, where
+///      totalSupport   = directSupport   + sum(positive contributions),
+///      totalChallenge = directChallenge + |sum(negative contributions)|,
+///      pool           = totalSupport + totalChallenge   (whitepaper §4.2.3).
+///      Contributions are NOT netted against each other before entering the
+///      pool: contested evidence dilutes confidence (patch_vs_pool_split).
 ///   4. A claim is active if direct stakes OR abs(incoming contributions) >= posting fee.
 ///   5. Cycle elimination: when computing VS(X), if a chain of links leads back to X,
 ///      X's contribution is zero. X cannot influence its own VS through any path.
@@ -238,9 +243,14 @@ contract ScoreEngine is GovernedUpgradeable {
 
         // Compute incoming link contributions (bounded). `exact` folds in every
         // kept edge's exactness (dropped-by-cap edges are path-independent).
-        uint256 absContribution;
-        int256 netContribution;
-        (netContribution, absContribution, exact) = _sumIncomingContributions(postId, computing, memo, depth);
+        // patch_vs_pool_split: positive and negative contributions are kept apart so
+        // each lands on its own side of the pool (whitepaper §4.2.3). The old
+        // code netted them first, so +X and -X vanished from the pool and a
+        // contested claim scored like an unchallenged one.
+        uint256 posContribution;
+        uint256 negContribution;
+        (posContribution, negContribution, exact) = _sumIncomingContributions(postId, computing, memo, depth);
+        uint256 absContribution = posContribution + negContribution;
 
         // Activity gate
         if (!directlyActive && absContribution < protocolPolicy.postingFeeVSP()) {
@@ -251,14 +261,8 @@ contract ScoreEngine is GovernedUpgradeable {
         }
 
         // Combine
-        int256 totalSupport = directSupport.toInt256();
-        int256 totalChallenge = directChallenge.toInt256();
-
-        if (netContribution > 0) {
-            totalSupport += netContribution;
-        } else if (netContribution < 0) {
-            totalChallenge += (-netContribution);
-        }
+        int256 totalSupport = directSupport.toInt256() + posContribution.toInt256();
+        int256 totalChallenge = directChallenge.toInt256() + negContribution.toInt256();
 
         int256 pool = totalSupport + totalChallenge;
         if (pool == 0) {
@@ -283,7 +287,7 @@ contract ScoreEngine is GovernedUpgradeable {
     function _sumIncomingContributions(uint256 postId, uint256[] memory computing, VSMemo memory memo, uint256 depth)
         internal
         view
-        returns (int256 net, uint256 abs_, bool exact)
+        returns (uint256 pos, uint256 neg, bool exact)
     {
         exact = true; // patch_h2_score_memo: AND of every kept edge's exactness
         LinkGraph.IncomingEdge[] memory inc = graph.getIncoming(postId);
@@ -326,9 +330,10 @@ contract ScoreEngine is GovernedUpgradeable {
             if (!eExact) {
                 exact = false;
             }
-            if (contrib != 0) {
-                net += contrib;
-                abs_ += _abs(contrib);
+            if (contrib > 0) {
+                pos += uint256(contrib);
+            } else if (contrib < 0) {
+                neg += uint256(-contrib);
             }
         }
     }
@@ -562,10 +567,6 @@ contract ScoreEngine is GovernedUpgradeable {
             return -RAY;
         }
         return x;
-    }
-
-    function _abs(int256 x) internal pure returns (uint256) {
-        return x >= 0 ? uint256(x) : uint256(-x);
     }
 
     // Reduced gap by 2 for maxIncomingEdges + maxOutgoingLinks
