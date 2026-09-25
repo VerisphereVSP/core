@@ -83,7 +83,7 @@ contract EconomicInvariantsTest is Test {
         stake.stake(c, 0, 100);
 
         assertTrue(views.isActive(c));
-        assertEq(views.getBaseVSRay(c), 1e18);
+        assertEq(views.getEffectiveVSRay(c), 1e18); // patch_game_b: one score
     }
 
     function test_VSBelowPostingFee() public {
@@ -93,8 +93,7 @@ contract EconomicInvariantsTest is Test {
         // Post is inactive (below posting fee threshold)
         assertFalse(views.isActive(c));
 
-        // baseVSRay still returns a score (it doesn't check activity)
-        assertEq(views.getBaseVSRay(c), 1e18, "baseVS should be +RAY for support-only");
+        // patch_game_b: getBaseVSRay removed from views (base VS internal, v17 §4.1)
 
         // effectiveVSRay returns 0 for inactive posts (activity gate)
         // NOTE: with MockClaimActivityPolicy (isActive = totalStake > 0),

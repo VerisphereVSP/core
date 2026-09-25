@@ -1,9 +1,9 @@
 {
   "_meta": {
     "contract": "src/StakeEngine.sol:StakeEngine",
-    "forge_version": "forge Version: 1.5.1-stable",
-    "generated_at": "2026-09-08T15:29:11Z",
-    "layout_sha256": "417a23c9b79a0ea7ca14d4b939351d9a2fa605d4ba21fc763bd67cfcbfb38b1d",
+    "forge_version": "forge Version: 1.5.1-v1.5.1",
+    "generated_at": "2026-09-24T20:42:44Z",
+    "layout_sha256": "1969104eca3314693a3b448eb10927d661e361effbc9a9430346a71088233879",
     "note": "Storage-layout regression baseline. Regenerate ONLY for an intended, reviewed, upgrade-safe layout change via check.sh --update.",
     "schema": 2
   },
@@ -142,10 +142,22 @@
         "type": "t_mapping(t_uint256,t_uint256)"
       },
       {
-        "label": "__gap",
+        "label": "observations",
         "offset": 0,
         "slot": 138,
-        "type": "t_array(t_uint256)495_storage"
+        "type": "t_mapping(t_uint256,t_array(t_struct(Observation)_storage)dyn_storage)"
+      },
+      {
+        "label": "scoreEngine",
+        "offset": 0,
+        "slot": 139,
+        "type": "t_contract(IScoreEngineV2)"
+      },
+      {
+        "label": "__gap",
+        "offset": 0,
+        "slot": 140,
+        "type": "t_array(t_uint256)493_storage"
       }
     ],
     "types": {
@@ -155,6 +167,11 @@
       },
       "t_array(t_address)dyn_storage": {
         "base": "t_address",
+        "encoding": "dynamic_array",
+        "numberOfBytes": "32"
+      },
+      "t_array(t_struct(Observation)_storage)dyn_storage": {
+        "base": "t_struct(Observation)_storage",
         "encoding": "dynamic_array",
         "numberOfBytes": "32"
       },
@@ -178,10 +195,10 @@
         "encoding": "inplace",
         "numberOfBytes": "3200"
       },
-      "t_array(t_uint256)495_storage": {
+      "t_array(t_uint256)493_storage": {
         "base": "t_uint256",
         "encoding": "inplace",
-        "numberOfBytes": "15840"
+        "numberOfBytes": "15776"
       },
       "t_bool": {
         "encoding": "inplace",
@@ -195,6 +212,10 @@
         "encoding": "inplace",
         "numberOfBytes": "20"
       },
+      "t_contract(IScoreEngineV2)": {
+        "encoding": "inplace",
+        "numberOfBytes": "20"
+      },
       "t_contract(IVSPToken)": {
         "encoding": "inplace",
         "numberOfBytes": "20"
@@ -204,6 +225,12 @@
         "key": "t_address",
         "numberOfBytes": "32",
         "value": "t_uint256"
+      },
+      "t_mapping(t_uint256,t_array(t_struct(Observation)_storage)dyn_storage)": {
+        "encoding": "mapping",
+        "key": "t_uint256",
+        "numberOfBytes": "32",
+        "value": "t_array(t_struct(Observation)_storage)dyn_storage"
       },
       "t_mapping(t_uint256,t_mapping(t_uint8,t_mapping(t_address,t_uint256)))": {
         "encoding": "mapping",
@@ -228,6 +255,42 @@
         "key": "t_uint8",
         "numberOfBytes": "32",
         "value": "t_mapping(t_address,t_uint256)"
+      },
+      "t_struct(Observation)_storage": {
+        "encoding": "inplace",
+        "members": [
+          {
+            "label": "ts",
+            "offset": 0,
+            "slot": 0,
+            "type": "t_uint64"
+          },
+          {
+            "label": "support",
+            "offset": 8,
+            "slot": 0,
+            "type": "t_uint96"
+          },
+          {
+            "label": "challenge",
+            "offset": 20,
+            "slot": 0,
+            "type": "t_uint96"
+          },
+          {
+            "label": "cumSupport",
+            "offset": 0,
+            "slot": 1,
+            "type": "t_uint256"
+          },
+          {
+            "label": "cumChallenge",
+            "offset": 0,
+            "slot": 2,
+            "type": "t_uint256"
+          }
+        ],
+        "numberOfBytes": "96"
       },
       "t_struct(PostState)_storage": {
         "encoding": "inplace",
@@ -371,9 +434,17 @@
         "encoding": "inplace",
         "numberOfBytes": "32"
       },
+      "t_uint64": {
+        "encoding": "inplace",
+        "numberOfBytes": "8"
+      },
       "t_uint8": {
         "encoding": "inplace",
         "numberOfBytes": "1"
+      },
+      "t_uint96": {
+        "encoding": "inplace",
+        "numberOfBytes": "12"
       }
     }
   }

@@ -4,6 +4,14 @@ pragma solidity ^0.8.20;
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IVSPToken.sol";
+
+/// @dev patch_game_b: the only ScoreEngine surface settlement needs.
+interface IScoreEngineV2 {
+    function effectivePoolWindow(uint256 postId, uint256 t0, uint256 t1)
+        external
+        view
+        returns (uint256 S, uint256 C, bool exact);
+}
 import "./interfaces/IProtocolPolicy.sol";
 import "./governance/GovernedUpgradeable.sol";
 
@@ -159,6 +167,30 @@ contract StakeEngine is GovernedUpgradeable {
     // stakers share the pooled tail bucket, so every per-side loop is O(C).
     uint256 public constant MAX_RANKED_LOTS = 100;
     uint256 private constant DEFAULT_SMAX_DECAY_RATE_RAY = 9e17; // 10% daily decay
+
+    // ── patch_game_b (whitepaper v17): evidence-economic settlement ───────────
+    /// @dev One observation per stake change: totals at `ts` and the running
+    ///      integrals ∫A dt, ∫D dt up to `ts`. Time-weighted totals over any window
+    ///      are (cum(t1) - cum(t0)) / (t1 - t0) with cum(t) extrapolated from the last
+    ///      observation at or before t. APPENDED storage; slot order is layout-checked.
+    struct Observation {
+        uint64 ts;
+        uint96 support;
+        uint96 challenge;
+        uint256 cumSupport;
+        uint256 cumChallenge;
+    }
+
+    /// @notice Gas a user transaction may spend on the inline settlement before it is deferred
+    ///         to the keeper (`SettleFirst`). updatePost() is unbounded.
+    uint256 public constant USER_SETTLE_GAS = 3_000_000;
+
+    error SettleFirst(uint256 postId);
+    error InexactScore(uint256 postId);
+    error NotSelf();
+    error ObservationOverflow(uint256 total);
+
+    event ScoreEngineSet(address indexed previous, address indexed current);
     uint256 private constant DEFAULT_SMAX_DECAY_MAX_EPOCHS = 30; // Full decay in ~30 days
 
     // ------------------------------------------------------------
@@ -349,6 +381,13 @@ contract StakeEngine is GovernedUpgradeable {
     /// @dev    Enables swapping in a new policy contract after deploy.
     event ProtocolPolicySet(address indexed oldPolicy, address indexed newPolicy);
 
+    /// @notice patch_game_b: wire the ScoreEngine whose effective pool settlement pays on.
+    function setScoreEngine(address newScoreEngine) external onlyGovernance {
+        address old = address(scoreEngine);
+        scoreEngine = IScoreEngineV2(newScoreEngine);
+        emit ScoreEngineSet(old, newScoreEngine);
+    }
+
     function setProtocolPolicy(address newProtocolPolicy) external onlyGovernance {
         if (newProtocolPolicy == address(0)) {
             revert ZeroAddressPolicy();
@@ -446,6 +485,120 @@ contract StakeEngine is GovernedUpgradeable {
     // ------------------------------------------------------------
     // Read (view — always current via projection)
     // ------------------------------------------------------------
+
+    /// @notice patch_game_b: the post's last settlement epoch (window start = epoch * EPOCH_LENGTH).
+    function getLastSnapshotEpoch(uint256 postId) external view returns (uint256) {
+        return posts[postId].lastSnapshotEpoch;
+    }
+
+    /// @notice patch_game_b (v17 §4.2.5): direct side totals time-weighted over [t0, t1].
+    ///         t1 <= t0, or a post with no observations yet (pre-upgrade posts before their first
+    ///         change), returns the live totals.
+    function getTimeWeightedTotals(uint256 postId, uint256 t0, uint256 t1)
+        external
+        view
+        returns (uint256 support, uint256 challenge)
+    {
+        Observation[] storage obs = observations[postId];
+        PostState storage ps = posts[postId];
+        if (t1 <= t0 || obs.length == 0) {
+            return (ps.sides[0].total, ps.sides[1].total);
+        }
+        (uint256 a1, uint256 d1) = _cumAt(obs, t1);
+        (uint256 a0, uint256 d0) = _cumAt(obs, t0);
+        uint256 span = t1 - t0;
+        return ((a1 - a0) / span, (d1 - d0) / span);
+    }
+
+    /// @dev cum(t): integral of the side totals from the first observation to t.
+    function _cumAt(Observation[] storage obs, uint256 t) internal view returns (uint256 cumA, uint256 cumD) {
+        uint256 n = obs.length;
+        if (t < obs[0].ts) {
+            return (0, 0); // before the post existed
+        }
+        // binary search: largest i with obs[i].ts <= t
+        uint256 lo = 0;
+        uint256 hi = n - 1;
+        while (lo < hi) {
+            uint256 mid = (lo + hi + 1) / 2;
+            if (obs[mid].ts <= t) {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        Observation storage o = obs[lo];
+        uint256 dt = t - o.ts;
+        return (o.cumSupport + uint256(o.support) * dt, o.cumChallenge + uint256(o.challenge) * dt);
+    }
+
+    /// @dev Record the current totals. Called after every change to a side total.
+    function _observe(uint256 postId) internal {
+        Observation[] storage obs = observations[postId];
+        PostState storage ps = posts[postId];
+        uint256 A = ps.sides[0].total;
+        uint256 D = ps.sides[1].total;
+        if (A > type(uint96).max || D > type(uint96).max) {
+            revert ObservationOverflow(A > D ? A : D);
+        }
+        uint256 n = obs.length;
+        if (n == 0) {
+            obs.push(Observation(uint64(block.timestamp), uint96(A), uint96(D), 0, 0));
+            return;
+        }
+        Observation storage last = obs[n - 1];
+        if (last.ts == block.timestamp) {
+            last.support = uint96(A);
+            last.challenge = uint96(D);
+            return;
+        }
+        uint256 dt = block.timestamp - last.ts;
+        obs.push(
+            Observation(
+                uint64(block.timestamp),
+                uint96(A),
+                uint96(D),
+                last.cumSupport + uint256(last.support) * dt,
+                last.cumChallenge + uint256(last.challenge) * dt
+            )
+        );
+    }
+
+    /// @dev Bootstrap for posts that existed before the upgrade: the first observation is seeded
+    ///      with the PRE-change totals at the post's window start, so their standing stake counts
+    ///      as present for the window rather than as created at this instant.
+    function _seedObservationIfLegacy(uint256 postId) internal {
+        if (observations[postId].length != 0) {
+            return;
+        }
+        PostState storage ps = posts[postId];
+        uint256 A = ps.sides[0].total;
+        uint256 D = ps.sides[1].total;
+        if (A + D == 0) {
+            return;
+        }
+        uint256 wStart = ps.lastSnapshotEpoch * EPOCH_LENGTH;
+        if (wStart == 0 || wStart >= block.timestamp) {
+            return;
+        }
+        observations[postId].push(Observation(uint64(wStart), uint96(A), uint96(D), 0, 0));
+    }
+
+    /// @dev User path: settle inline within USER_SETTLE_GAS or defer to the keeper.
+    function _settleBounded(uint256 postId) internal {
+        try this.settleSelf{gas: USER_SETTLE_GAS}(postId) {}
+        catch {
+            revert SettleFirst(postId);
+        }
+    }
+
+    /// @notice Self-call target for the bounded inline settlement. Not callable externally.
+    function settleSelf(uint256 postId) external {
+        if (msg.sender != address(this)) {
+            revert NotSelf();
+        }
+        _maybeSnapshot(postId, _currentEpoch());
+    }
 
     function getPostTotals(uint256 postId) external view returns (uint256 support, uint256 challenge) {
         PostState storage ps = posts[postId];
@@ -560,7 +713,8 @@ contract StakeEngine is GovernedUpgradeable {
         if (ps.lastSnapshotEpoch == 0) {
             ps.lastSnapshotEpoch = epoch;
         }
-        _maybeSnapshot(postId, epoch);
+        _seedObservationIfLegacy(postId); // patch_game_b
+        _settleBounded(postId); // patch_game_b: inline within USER_SETTLE_GAS, else SettleFirst
         _increaseUser(postId, side, amount, _msgSender()); // patch_h1a_bucket
         emit StakeAdded(postId, _msgSender(), side, amount);
     }
@@ -586,7 +740,8 @@ contract StakeEngine is GovernedUpgradeable {
         }
         PostState storage ps = posts[postId];
         uint256 epoch = _currentEpoch();
-        _maybeSnapshot(postId, epoch);
+        _seedObservationIfLegacy(postId); // patch_game_b
+        _settleBounded(postId); // patch_game_b: inline within USER_SETTLE_GAS, else SettleFirst
         // patch_h1a_bucket: unified ranked/bucket decrease (both bounded)
         if (_userAmount(ps, side, _msgSender()) < amount) {
             revert NotEnoughStake();
@@ -602,6 +757,7 @@ contract StakeEngine is GovernedUpgradeable {
     // ------------------------------------------------------------
 
     function updatePost(uint256 postId) external nonReentrant {
+        _seedObservationIfLegacy(postId); // patch_game_b
         uint256 epoch = _currentEpoch();
         _forceSnapshot(postId, epoch);
     }
@@ -629,7 +785,8 @@ contract StakeEngine is GovernedUpgradeable {
         }
         PostState storage ps = posts[postId];
         uint256 epoch = _currentEpoch();
-        _maybeSnapshot(postId, epoch);
+        _seedObservationIfLegacy(postId); // patch_game_b
+        _settleBounded(postId); // patch_game_b: inline within USER_SETTLE_GAS, else SettleFirst
         address user = _msgSender();
 
         uint256 currentSup = _userAmount(ps, 0, user); // patch_h1a_bucket
@@ -732,22 +889,27 @@ contract StakeEngine is GovernedUpgradeable {
             return;
         }
 
-        int256 vsNum = int256(2 * A) - int256(T);
-        if (vsNum == 0) {
-            // VS neutral — no growth/decay. patch_prC_rulings S-12: the old
-            // _rescalePositions call here was dead in effect — positions are
-            // recomputed as midpoints (< total) after every queue mutation and
-            // every settlement, so its rescale body never executed; the
-            // clamp inside _applyEpoch remains the safety net regardless.
+        // patch_game_b (v17 §3.2): truth pressure and the accruing side come from the
+        // effective pool over this window; participation stays on direct T.
+        uint256 S = A;
+        uint256 C = D;
+        if (address(scoreEngine) != address(0)) {
+            bool exact;
+            (S, C, exact) =
+                scoreEngine.effectivePoolWindow(postId, lastEpoch * EPOCH_LENGTH, currentEpoch * EPOCH_LENGTH);
+            if (!exact) {
+                revert InexactScore(postId);
+            }
+        }
+        if (S == C) {
             ps.lastSnapshotEpoch = currentEpoch;
+            _observe(postId);
             return;
         }
-
-        bool supportWins = vsNum > 0;
-        uint256 absVS = uint256(vsNum > 0 ? vsNum : -vsNum);
-
+        bool supportWins = S > C;
+        uint256 absVS = supportWins ? S - C : C - S;
         uint256 epochsElapsed = currentEpoch - lastEpoch;
-        uint256 vRay = (absVS * RAY) / T;
+        uint256 vRay = (absVS * RAY) / (S + C);
         // patch_prC_rulings S-04 (ratified): participation deliberately couples
         // every post's rate to the GLOBAL leader via sMax — smaller posts earn a
         // scaled-down rate by design; this is the intended cross-post coupling.
@@ -787,6 +949,7 @@ contract StakeEngine is GovernedUpgradeable {
         settledTotal[postId] = qs.total + qc.total; // post-mint/burn totals
 
         ps.lastSnapshotEpoch = currentEpoch;
+        _observe(postId); // patch_game_b: accrual changed the totals
 
         _updateSMax(postId, settledTotal[postId]); // just settled above
 
@@ -1406,6 +1569,7 @@ contract StakeEngine is GovernedUpgradeable {
         _rebalance(postId, ps, q, side); // patch_h1b_promotion: keep ranked = the C largest
         _recomputeWeightedPositions(postId, side, q);
         _recomputeSideTotal(q); // exact side total (ranked + bucketLive)
+        _observe(postId); // patch_game_b
         _updateSMax(postId, settledTotal[postId]); // ruling 3b: settled, not live
     }
 
@@ -1428,6 +1592,7 @@ contract StakeEngine is GovernedUpgradeable {
         _rebalance(postId, ps, q, side); // patch_h1b_promotion: fill freed slots / swap boundary
         _recomputeWeightedPositions(postId, side, q);
         _recomputeSideTotal(q); // exact side total (ranked + bucketLive)
+        _observe(postId); // patch_game_b
     }
 
     /// @dev Project the bucket's live value forward one settlement at `rBase`
@@ -1690,8 +1855,13 @@ contract StakeEngine is GovernedUpgradeable {
         }
         q.total = total + _bucketLive(q); // patch_h1a_bucket
     }
+    // ── patch_game_b: two slots consumed from __gap (495 -> 493); layout re-baselined deliberately ──
+    mapping(uint256 => Observation[]) internal observations;
+    /// @dev ScoreEngine that supplies the effective pool at settlement (v17 §3.2). address(0) =
+    ///      unwired (test harnesses): settlement uses direct totals, as v16 did.
+    IScoreEngineV2 public scoreEngine;
 
-    uint256[495] private __gap; // 499 -> 498 (postRegistry) -> 495 (posOffset, entryTime, settledTotal)
+    uint256[493] private __gap; // 495 -> 493 (observations, scoreEngine) patch_game_b // 499 -> 498 (postRegistry) -> 495 (posOffset, entryTime, settledTotal)
 }
 
 /// @dev Minimal read surface the engine needs from PostRegistry (H1).

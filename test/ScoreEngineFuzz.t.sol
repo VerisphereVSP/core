@@ -139,6 +139,9 @@ contract ScoreEngineFuzzTest is Test {
         uint256 sup = bound(uint256(support), FEE, 1e24); // bundle05_a
         uint256 chal = bound(uint256(challenge), FEE, 1e24); // bundle05_a
         vm.assume(sup != chal);
+        // patch_game_b: baseVS is (A-D)/T on the RAY scale; a majority smaller than T/1e18 rounds to 0
+        uint256 diff = sup > chal ? sup - chal : chal - sup;
+        vm.assume(diff * 1e18 >= sup + chal);
 
         uint256 c = _createAndStake("sign test", sup, chal);
 

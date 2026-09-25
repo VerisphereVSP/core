@@ -23,8 +23,7 @@ contract ProtocolViews is GovernedUpgradeable {
         uint256 totalStake;
         uint256 postingFee;
         bool isActive;
-        int256 baseVSRay;
-        int256 effectiveVSRay;
+        int256 effectiveVSRay; // patch_game_b: base VS is internal (whitepaper v17 §4.1); a post has ONE score
         uint256 incomingCount;
         uint256 outgoingCount;
     }
@@ -57,7 +56,6 @@ contract ProtocolViews is GovernedUpgradeable {
         s.totalStake = s.supportStake + s.challengeStake;
         s.postingFee = protocolPolicy.postingFeeVSP();
         s.isActive = s.totalStake >= s.postingFee;
-        s.baseVSRay = score.baseVSRay(claimPostId);
         s.effectiveVSRay = score.effectiveVSRay(claimPostId);
         s.incomingCount = graph.getIncoming(claimPostId).length;
         s.outgoingCount = graph.getOutgoing(claimPostId).length;
@@ -70,10 +68,6 @@ contract ProtocolViews is GovernedUpgradeable {
     function isActive(uint256 postId) external view returns (bool) {
         (uint256 s, uint256 c) = stake.getPostTotals(postId);
         return (s + c) >= protocolPolicy.postingFeeVSP();
-    }
-
-    function getBaseVSRay(uint256 postId) external view returns (int256) {
-        return score.baseVSRay(postId);
     }
 
     function getEffectiveVSRay(uint256 postId) external view returns (int256) {
