@@ -4,6 +4,15 @@ pragma solidity ^0.8.20;
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IVSPToken.sol";
+import "./lib/TimeWeighted.sol";
+
+/// @dev patch_game_b: the only ScoreEngine surface settlement needs.
+interface IScoreEngineV2 {
+    function effectivePoolWindow(uint256 postId, uint256 t0, uint256 t1)
+        external
+        view
+        returns (uint256 S, uint256 C, bool exact);
+}
 import "./interfaces/IProtocolPolicy.sol";
 import "./governance/GovernedUpgradeable.sol";
 
@@ -97,7 +106,9 @@ contract StakeEngine is GovernedUpgradeable {
     uint256 private _reentrancyStatus;
 
     modifier nonReentrant() {
-        require(_reentrancyStatus != _ENTERED, "ReentrancyGuard: reentrant call");
+        if (_reentrancyStatus == _ENTERED) {
+            revert Reentrant();
+        }
         _reentrancyStatus = _ENTERED;
         _;
         _reentrancyStatus = _NOT_ENTERED;
@@ -159,6 +170,17 @@ contract StakeEngine is GovernedUpgradeable {
     // stakers share the pooled tail bucket, so every per-side loop is O(C).
     uint256 public constant MAX_RANKED_LOTS = 100;
     uint256 private constant DEFAULT_SMAX_DECAY_RATE_RAY = 9e17; // 10% daily decay
+
+    // ── patch_game_b (whitepaper v17): evidence-economic settlement ───────────
+    /// @notice Gas a user transaction may spend on the inline settlement before it is deferred
+    ///         to the keeper (`SettleFirst`). updatePost() is unbounded.
+    uint256 internal constant USER_SETTLE_GAS = 3_000_000;
+
+    error SettleFirst(uint256 postId);
+    error TransferFailed(); // EIP-170: replaces 5 revert strings
+    error Reentrant();
+    error InexactScore(uint256 postId);
+
     uint256 private constant DEFAULT_SMAX_DECAY_MAX_EPOCHS = 30; // Full decay in ~30 days
 
     // ------------------------------------------------------------
@@ -349,6 +371,11 @@ contract StakeEngine is GovernedUpgradeable {
     /// @dev    Enables swapping in a new policy contract after deploy.
     event ProtocolPolicySet(address indexed oldPolicy, address indexed newPolicy);
 
+    /// @notice patch_game_b: wire the ScoreEngine whose effective pool settlement pays on.
+    function setScoreEngine(address newScoreEngine) external onlyGovernance {
+        scoreEngine = IScoreEngineV2(newScoreEngine);
+    }
+
     function setProtocolPolicy(address newProtocolPolicy) external onlyGovernance {
         if (newProtocolPolicy == address(0)) {
             revert ZeroAddressPolicy();
@@ -446,6 +473,44 @@ contract StakeEngine is GovernedUpgradeable {
     // ------------------------------------------------------------
     // Read (view — always current via projection)
     // ------------------------------------------------------------
+
+    /// @notice patch_game_b: the post's last settlement epoch (window start = epoch * EPOCH_LENGTH).
+    function getLastSnapshotEpoch(uint256 postId) external view returns (uint256) {
+        return posts[postId].lastSnapshotEpoch;
+    }
+
+    /// @notice patch_game_b (v17 §4.2.5): direct side totals time-weighted over [t0, t1].
+    ///         t1 <= t0, or a post with no observations yet, returns the live totals.
+    function getTimeWeightedTotals(uint256 postId, uint256 t0, uint256 t1)
+        external
+        view
+        returns (uint256 support, uint256 challenge)
+    {
+        PostState storage ps = posts[postId];
+        return observations[postId].totals(t0, t1, ps.sides[0].total, ps.sides[1].total);
+    }
+
+    /// @dev Record the current totals. Called after every change to a side total.
+    function _observe(uint256 postId) internal {
+        PostState storage ps = posts[postId];
+        observations[postId].observe(ps.sides[0].total, ps.sides[1].total);
+    }
+
+    /// @dev User path: settle inline within USER_SETTLE_GAS or defer to the keeper.
+    function _settleBounded(uint256 postId) internal {
+        try this.settleSelf{gas: USER_SETTLE_GAS}(postId) {}
+        catch {
+            revert SettleFirst(postId);
+        }
+    }
+
+    /// @notice Self-call target for the bounded inline settlement. Not callable externally.
+    function settleSelf(uint256 postId) external {
+        if (msg.sender != address(this)) {
+            revert NotGuardianOrGovernance(); // self-call only
+        }
+        _maybeSnapshot(postId, _currentEpoch());
+    }
 
     function getPostTotals(uint256 postId) external view returns (uint256 support, uint256 challenge) {
         PostState storage ps = posts[postId];
@@ -554,13 +619,15 @@ contract StakeEngine is GovernedUpgradeable {
                 revert LotExceedsCap(lotAfter, MAX_STAKE_AMOUNT);
             }
         }
-        require(ERC20_TOKEN.transferFrom(_msgSender(), address(this), amount), "VSP transfer failed");
+        if (!ERC20_TOKEN.transferFrom(_msgSender(), address(this), amount)) {
+            revert TransferFailed();
+        }
         PostState storage ps = posts[postId];
         uint256 epoch = _currentEpoch();
         if (ps.lastSnapshotEpoch == 0) {
             ps.lastSnapshotEpoch = epoch;
         }
-        _maybeSnapshot(postId, epoch);
+        _settleBounded(postId); // patch_game_b: inline within USER_SETTLE_GAS, else SettleFirst
         _increaseUser(postId, side, amount, _msgSender()); // patch_h1a_bucket
         emit StakeAdded(postId, _msgSender(), side, amount);
     }
@@ -586,14 +653,16 @@ contract StakeEngine is GovernedUpgradeable {
         }
         PostState storage ps = posts[postId];
         uint256 epoch = _currentEpoch();
-        _maybeSnapshot(postId, epoch);
+        _settleBounded(postId); // patch_game_b: inline within USER_SETTLE_GAS, else SettleFirst
         // patch_h1a_bucket: unified ranked/bucket decrease (both bounded)
         if (_userAmount(ps, side, _msgSender()) < amount) {
             revert NotEnoughStake();
         }
         uint256 removed = _decreaseUser(postId, side, amount, _msgSender());
         _updateSMax(postId, settledTotal[postId]); // ruling 3b: settled, not live
-        require(ERC20_TOKEN.transfer(_msgSender(), removed), "VSP transfer failed");
+        if (!ERC20_TOKEN.transfer(_msgSender(), removed)) {
+            revert TransferFailed();
+        }
         emit StakeWithdrawn(postId, _msgSender(), side, removed, true);
     }
 
@@ -629,7 +698,7 @@ contract StakeEngine is GovernedUpgradeable {
         }
         PostState storage ps = posts[postId];
         uint256 epoch = _currentEpoch();
-        _maybeSnapshot(postId, epoch);
+        _settleBounded(postId); // patch_game_b: inline within USER_SETTLE_GAS, else SettleFirst
         address user = _msgSender();
 
         uint256 currentSup = _userAmount(ps, 0, user); // patch_h1a_bucket
@@ -650,7 +719,9 @@ contract StakeEngine is GovernedUpgradeable {
             }
             if (absTarget > currentSup) {
                 uint256 toStake = absTarget - currentSup;
-                require(ERC20_TOKEN.transferFrom(user, address(this), toStake), "VSP transfer failed");
+                if (!ERC20_TOKEN.transferFrom(user, address(this), toStake)) {
+                    revert TransferFailed();
+                }
                 _increaseUser(postId, 0, toStake, user); // patch_h1a_bucket
                 emit StakeAdded(postId, user, 0, toStake);
             } else if (absTarget < currentSup) {
@@ -662,7 +733,9 @@ contract StakeEngine is GovernedUpgradeable {
             }
             if (absTarget > currentChal) {
                 uint256 toStake = absTarget - currentChal;
-                require(ERC20_TOKEN.transferFrom(user, address(this), toStake), "VSP transfer failed");
+                if (!ERC20_TOKEN.transferFrom(user, address(this), toStake)) {
+                    revert TransferFailed();
+                }
                 _increaseUser(postId, 1, toStake, user); // patch_h1a_bucket
                 emit StakeAdded(postId, user, 1, toStake);
             } else if (absTarget < currentChal) {
@@ -683,7 +756,9 @@ contract StakeEngine is GovernedUpgradeable {
         if (removed == 0) {
             return;
         }
-        require(ERC20_TOKEN.transfer(user, removed), "VSP transfer failed");
+        if (!ERC20_TOKEN.transfer(user, removed)) {
+            revert TransferFailed();
+        }
         emit StakeWithdrawn(postId, user, side, removed, true);
     }
 
@@ -732,33 +807,42 @@ contract StakeEngine is GovernedUpgradeable {
             return;
         }
 
-        int256 vsNum = int256(2 * A) - int256(T);
-        if (vsNum == 0) {
-            // VS neutral — no growth/decay. patch_prC_rulings S-12: the old
-            // _rescalePositions call here was dead in effect — positions are
-            // recomputed as midpoints (< total) after every queue mutation and
-            // every settlement, so its rescale body never executed; the
-            // clamp inside _applyEpoch remains the safety net regardless.
+        // patch_game_b: legacy posts (pre-upgrade) get their first observation at the window
+        // start with the pre-settlement totals, so standing stake counts for this window.
+        if (T != 0) {
+            observations[postId].seed(lastEpoch * EPOCH_LENGTH, A, D);
+        }
+        // patch_game_b (v17 §3.2): truth pressure and the accruing side come from the
+        // effective pool over this window; participation stays on direct T.
+        uint256 S = A;
+        uint256 C = D;
+        if (address(scoreEngine) != address(0)) {
+            bool exact;
+            (S, C, exact) =
+                scoreEngine.effectivePoolWindow(postId, lastEpoch * EPOCH_LENGTH, currentEpoch * EPOCH_LENGTH);
+            if (!exact) {
+                revert InexactScore(postId);
+            }
+        }
+        if (S == C) {
             ps.lastSnapshotEpoch = currentEpoch;
+            _observe(postId);
             return;
         }
-
-        bool supportWins = vsNum > 0;
-        uint256 absVS = uint256(vsNum > 0 ? vsNum : -vsNum);
-
-        uint256 epochsElapsed = currentEpoch - lastEpoch;
-        uint256 vRay = (absVS * RAY) / T;
-        // patch_prC_rulings S-04 (ratified): participation deliberately couples
-        // every post's rate to the GLOBAL leader via sMax — smaller posts earn a
-        // scaled-down rate by design; this is the intended cross-post coupling.
-        uint256 participationRay = (T * RAY) / sMax;
-        if (participationRay > RAY) {
-            participationRay = RAY;
-        }
-
-        uint256 rMin = (protocolPolicy.stakeIntRateMinRay() * EPOCH_LENGTH * epochsElapsed) / YEAR_LENGTH;
-        uint256 rMax = (protocolPolicy.stakeIntRateMaxRay() * EPOCH_LENGTH * epochsElapsed) / YEAR_LENGTH;
-        uint256 rBase = rMin + ((rMax - rMin) * vRay * participationRay) / (RAY * RAY);
+        bool supportWins = S > C;
+        // patch_prC_rulings S-04 (ratified): participation deliberately couples every post's
+        // rate to the GLOBAL leader via sMax (see TimeWeighted.rBase; moved out for EIP-170).
+        uint256 rBase = TimeWeighted.rBase(
+            S,
+            C,
+            T,
+            sMax,
+            protocolPolicy.stakeIntRateMinRay(),
+            protocolPolicy.stakeIntRateMaxRay(),
+            EPOCH_LENGTH,
+            currentEpoch - lastEpoch,
+            YEAR_LENGTH
+        );
 
         // Apply epoch gains/losses (positions that exceed sideTotal are
         // safely clamped to zero weight inside _applyEpoch; midpoint
@@ -787,6 +871,7 @@ contract StakeEngine is GovernedUpgradeable {
         settledTotal[postId] = qs.total + qc.total; // post-mint/burn totals
 
         ps.lastSnapshotEpoch = currentEpoch;
+        _observe(postId); // patch_game_b: accrual changed the totals
 
         _updateSMax(postId, settledTotal[postId]); // just settled above
 
@@ -1406,6 +1491,7 @@ contract StakeEngine is GovernedUpgradeable {
         _rebalance(postId, ps, q, side); // patch_h1b_promotion: keep ranked = the C largest
         _recomputeWeightedPositions(postId, side, q);
         _recomputeSideTotal(q); // exact side total (ranked + bucketLive)
+        _observe(postId); // patch_game_b
         _updateSMax(postId, settledTotal[postId]); // ruling 3b: settled, not live
     }
 
@@ -1428,6 +1514,7 @@ contract StakeEngine is GovernedUpgradeable {
         _rebalance(postId, ps, q, side); // patch_h1b_promotion: fill freed slots / swap boundary
         _recomputeWeightedPositions(postId, side, q);
         _recomputeSideTotal(q); // exact side total (ranked + bucketLive)
+        _observe(postId); // patch_game_b
     }
 
     /// @dev Project the bucket's live value forward one settlement at `rBase`
@@ -1690,8 +1777,14 @@ contract StakeEngine is GovernedUpgradeable {
         }
         q.total = total + _bucketLive(q); // patch_h1a_bucket
     }
+    // ── patch_game_b: two slots consumed from __gap (495 -> 493); layout re-baselined deliberately ──
+    mapping(uint256 => TimeWeighted.Observation[]) internal observations;
+    using TimeWeighted for TimeWeighted.Observation[];
+    /// @dev ScoreEngine that supplies the effective pool at settlement (v17 §3.2). address(0) =
+    ///      unwired (test harnesses): settlement uses direct totals, as v16 did.
+    IScoreEngineV2 public scoreEngine;
 
-    uint256[495] private __gap; // 499 -> 498 (postRegistry) -> 495 (posOffset, entryTime, settledTotal)
+    uint256[493] private __gap; // 495 -> 493 (observations, scoreEngine) patch_game_b // 499 -> 498 (postRegistry) -> 495 (posOffset, entryTime, settledTotal)
 }
 
 /// @dev Minimal read surface the engine needs from PostRegistry (H1).

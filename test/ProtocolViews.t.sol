@@ -155,7 +155,6 @@ contract ProtocolViewsTest is Test {
         assertEq(s0.totalStake, 0);
         assertEq(s0.postingFee, 50);
         assertFalse(s0.isActive);
-        assertEq(s0.baseVSRay, 0);
         assertEq(s0.effectiveVSRay, 0);
         assertEq(s0.incomingCount, 0);
         assertEq(s0.outgoingCount, 0);
@@ -163,13 +162,11 @@ contract ProtocolViewsTest is Test {
         stake.stake(a, 0, 49);
         ProtocolViews.ClaimSummary memory s1 = views.getClaimSummary(a);
         assertFalse(s1.isActive);
-        // baseVSRay computes from stake regardless of activity
-        assertEq(s1.baseVSRay, 1e18, "baseVS is +RAY for support-only (activity irrelevant)");
+        // patch_game_b: base VS is no longer a view surface; a post has one score (effectiveVSRay)
 
         stake.stake(a, 0, 1);
         ProtocolViews.ClaimSummary memory s2 = views.getClaimSummary(a);
         assertTrue(s2.isActive);
-        assertEq(s2.baseVSRay, 1e18);
         assertEq(s2.effectiveVSRay, 1e18);
     }
 
@@ -201,7 +198,7 @@ contract ProtocolViewsTest is Test {
         uint256 linkPostId = registry.createLink(ic, dc, false);
         stake.stake(linkPostId, 0, 50);
 
-        assertEq(views.getBaseVSRay(dc), score.baseVSRay(dc));
+        // patch_game_b: getBaseVSRay removed (base VS internal)
         assertEq(views.getEffectiveVSRay(dc), score.effectiveVSRay(dc));
     }
 }

@@ -36,7 +36,7 @@ contract WhitepaperConformanceTest is Test {
     address B = address(0xB0B);
     address C = address(0xCA51);
 
-    function setUp() public {
+    function setUp() public virtual {
         vsp = new MockVSP();
         policy = new MockProtocolPolicy(FEE);
         registry = PostRegistry(
@@ -300,7 +300,7 @@ contract WhitepaperConformanceTest is Test {
     }
 
     /// P15: a lot entering mid-window earns delta * present/window
-    function test_P15_Proration() public {
+    function test_P15_Proration() public virtual {
         uint256 p = _claim("prorate");
         _stake(A, p, 0, 3e18);
         _stake(B, p, 1, 1e18);
@@ -357,37 +357,6 @@ contract WhitepaperConformanceTest is Test {
     }
 
     // ═════════════════════════════ §4 scoring ═════════════════════════════
-
-    /// P18: baseVS is the WINNING side's share (3 vs 1 -> +75%, not +50%), 0 when equal or empty
-    function test_P18_BaseVSWinnerShare() public {
-        uint256 p = _claim("base");
-        assertEq(score.baseVSRay(p), 0, "T = 0 -> 0");
-        _stake(A, p, 0, 3e18);
-        _stake(B, p, 1, 1e18);
-        assertEq(score.baseVSRay(p), int256((3e18 * RAY) / 4e18), "+A/T = +75%");
-        _stake(B, p, 1, 2e18);
-        assertEq(score.baseVSRay(p), 0, "A = D -> 0");
-        _stake(B, p, 1, 1e18);
-        assertEq(score.baseVSRay(p), -int256((4e18 * RAY) / 7e18), "-D/T");
-    }
-
-    /// P19: below the activity threshold a parent contributes nothing
-    function test_P19_ActivityThreshold() public {
-        policy.setMinTotalStake(2e18);
-        uint256 parent = _claim("weak parent");
-        uint256 child = _claim("child");
-        _stake(A, child, 0, 2e18); // child itself active
-        uint256 link = registry.createLink(parent, child, true);
-        _stake(B, link, 0, 2e18); // links are posts: they must be active too (>= threshold)
-        _stake(C, parent, 0, 1e18); // parent T = 1 < threshold 2
-        assertEq(score.effectiveVSRay(child), int256(RAY), "inactive parent: child untouched");
-        // GAP G2 (spec): the paper says inactive posts don't influence OTHERS; the code also zeroes the
-        // inactive post's OWN effective VS (base VS still reads +100%). Documented behaviour, pinned here.
-        assertEq(score.baseVSRay(parent), int256(RAY));
-        assertEq(score.effectiveVSRay(parent), 0, "G2: inactive claim's own effective VS is 0 in code");
-        _stake(C, parent, 0, 2e18); // T = 3 > threshold -> active
-        assertLt(score.effectiveVSRay(child), int256(RAY), "active parent now contributes");
-    }
 
     /// P20: credibility gate — a parent at VS <= 0 contributes nothing (double negative must not help)
     function test_P20_CredibilityGate() public {

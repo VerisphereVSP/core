@@ -73,12 +73,33 @@ contract ScoreEngine is GovernedUpgradeable {
         bool[] used; // slot occupied?
         uint256 visited;
         bool full; // table saturated -> stop inserting (still correct)
+        // patch_game_b: the settlement window every stake quantity is time-weighted over
+        uint256 t0;
+        uint256 t1;
     }
 
     function _newMemo() internal pure returns (VSMemo memory m) {
         m.keys = new uint256[](VS_MEMO_SLOTS);
         m.vals = new int256[](VS_MEMO_SLOTS);
         m.used = new bool[](VS_MEMO_SLOTS);
+    }
+
+    /// @dev patch_game_b: the DISPLAY memo — instantaneous pool from live totals (window (0,0) makes
+    ///      StakeEngine.getTimeWeightedTotals return live totals). Settlement uses the window average
+    ///      of the same pool via effectivePoolWindow (whitepaper v17 §4.2.5).
+    function _newMemoFor(uint256) internal pure returns (VSMemo memory m) {
+        m = _newMemo();
+    }
+
+    function _newMemoWindow(uint256 t0, uint256 t1) internal pure returns (VSMemo memory m) {
+        m = _newMemo();
+        m.t0 = t0;
+        m.t1 = t1;
+    }
+
+    /// @dev patch_game_b: direct totals of a post, time-weighted over the memo window (§4.2.5).
+    function _totals(uint256 postId, VSMemo memory memo) internal view returns (uint256 A, uint256 D) {
+        return stake.getTimeWeightedTotals(postId, memo.t0, memo.t1);
     }
 
     function _memoGet(VSMemo memory m, uint256 postId) internal pure returns (bool hit, int256 val) {
@@ -179,26 +200,59 @@ contract ScoreEngine is GovernedUpgradeable {
 
     // ── VS Computation ──────────────────────────────────────────
 
+    /// @notice patch_game_b (whitepaper v17 §4.1): base VS is INTERNAL — the direct stake ratio on the
+    ///         same scale as the effective score, (A - D) / T, and 0 for an inactive post. Kept public
+    ///         for tooling; it is not a score a post "has" — use effectiveVSRay / effectivePool.
     function baseVSRay(uint256 postId) public view returns (int256) {
-        (uint256 A, uint256 D) = stake.getPostTotals(postId);
+        return _baseVSRay(postId, _newMemoFor(postId));
+    }
+
+    function _baseVSRay(uint256 postId, VSMemo memory memo) internal view returns (int256) {
+        (uint256 A, uint256 D) = _totals(postId, memo);
         uint256 T = A + D;
-        if (T == 0) {
+        if (T == 0 || !protocolPolicy.isActive(_liveTotal(postId))) {
             return 0;
         }
-        if (A > D) {
-            return int256((A * uint256(RAY)) / T);
-        }
-        if (D > A) {
-            return -int256((D * uint256(RAY)) / T);
-        }
-        return 0;
+        return _clampRay(((int256(A) - int256(D)) * RAY) / int256(T));
     }
 
     function effectiveVSRay(uint256 postId) external view returns (int256) {
         uint256[] memory computing = new uint256[](MAX_DEPTH + 1);
-        VSMemo memory memo = _newMemo(); // patch_h2_score_memo
+        VSMemo memory memo = _newMemoFor(postId); // patch_h2_score_memo + patch_game_b window
         (int256 v,) = _effectiveVSRay(postId, computing, memo, 0);
         return v;
+    }
+
+    /// @notice patch_game_b (whitepaper v17 §4.2.3): the instantaneous effective pool (live totals).
+    function effectivePool(uint256 postId) external view returns (uint256 S, uint256 C, bool exact) {
+        return _effectivePoolWindow(postId, _newMemoFor(postId));
+    }
+
+    /// @notice The effective pool over an explicit window — what StakeEngine settles on.
+    function effectivePoolWindow(uint256 postId, uint256 t0, uint256 t1)
+        external
+        view
+        returns (uint256 S, uint256 C, bool exact)
+    {
+        return _effectivePoolWindow(postId, _newMemoWindow(t0, t1));
+    }
+
+    function _effectivePoolWindow(uint256 postId, VSMemo memory memo)
+        internal
+        view
+        returns (uint256 S, uint256 C, bool exact)
+    {
+        uint256[] memory computing = new uint256[](MAX_DEPTH + 1);
+        computing[0] = postId;
+        (uint256 A, uint256 D) = _totals(postId, memo);
+        bool directlyActive = protocolPolicy.isActive(_liveTotal(postId));
+        uint256 pos;
+        uint256 neg;
+        (pos, neg, exact) = _sumIncomingContributions(postId, computing, memo, 0);
+        if (!directlyActive && pos + neg < protocolPolicy.postingFeeVSP()) {
+            return (0, 0, exact);
+        }
+        return (A + pos, D + neg, exact);
     }
 
     // patch_h2_score_memo: returns (value, exact). `exact` == the whole subtree
@@ -238,8 +292,8 @@ contract ScoreEngine is GovernedUpgradeable {
 
         computing[depth] = postId;
 
-        (uint256 directSupport, uint256 directChallenge) = stake.getPostTotals(postId);
-        bool directlyActive = protocolPolicy.isActive(directSupport + directChallenge);
+        (uint256 directSupport, uint256 directChallenge) = _totals(postId, memo); // patch_game_b
+        bool directlyActive = protocolPolicy.isActive(_liveTotal(postId));
 
         // Compute incoming link contributions (bounded). `exact` folds in every
         // kept edge's exactness (dropped-by-cap edges are path-independent).
@@ -304,8 +358,9 @@ contract ScoreEngine is GovernedUpgradeable {
                 // inactive contributes exactly zero, so it must not occupy one
                 // of the bounded slots and displace honest evidence. Such links
                 // sort to the bottom (key 0) and fall outside the cap.
-                stakes[i] =
-                    protocolPolicy.isActive(_totalStake(inc[i].fromClaimPostId)) ? _totalStake(inc[i].linkPostId) : 0;
+                stakes[i] = protocolPolicy.isActive(_liveTotal(inc[i].fromClaimPostId))
+                    ? _totalStake(inc[i].linkPostId, memo)
+                    : 0;
             }
             // Insertion sort (view call, no gas limit; n typically < 200)
             for (uint256 i = 1; i < n; i++) {
@@ -363,13 +418,13 @@ contract ScoreEngine is GovernedUpgradeable {
         uint256 fee
     ) internal view returns (int256 contrib, bool exact) {
         exact = true;
-        uint256 parentTotal = _totalStake(e.fromClaimPostId);
-        if (!protocolPolicy.isActive(parentTotal)) {
+        uint256 parentTotal = _totalStake(e.fromClaimPostId, memo);
+        if (!protocolPolicy.isActive(_liveTotal(e.fromClaimPostId))) {
             return (0, true);
         }
 
-        uint256 linkStake = _totalStake(e.linkPostId);
-        if (!protocolPolicy.isActive(linkStake)) {
+        uint256 linkStake = _totalStake(e.linkPostId, memo);
+        if (!protocolPolicy.isActive(_liveTotal(e.linkPostId))) {
             return (0, true);
         }
 
@@ -381,7 +436,7 @@ contract ScoreEngine is GovernedUpgradeable {
         }
 
         // Link VS
-        int256 linkVS = baseVSRay(e.linkPostId);
+        int256 linkVS = _baseVSRay(e.linkPostId, memo);
         if (linkVS <= 0) {
             return (0, exact);
         }
@@ -389,7 +444,7 @@ contract ScoreEngine is GovernedUpgradeable {
         // Parent mass distributed to this link (bounded outgoing sum +
         // top-N membership gate enforcing conservation of influence).
         (uint256 sumOutgoing, uint256 thresholdStake, uint256 thresholdPostId) =
-            _sumOutgoingLinkStake(e.fromClaimPostId, fee);
+            _sumOutgoingLinkStake(e.fromClaimPostId, fee, memo);
         if (sumOutgoing == 0) {
             return (0, exact);
         }
@@ -459,14 +514,15 @@ contract ScoreEngine is GovernedUpgradeable {
 
         // Apply the same incoming-cap gate that _sumIncomingContributions uses,
         // so this view reports the same number that effectiveVSRay would see.
+        VSMemo memory memo = _newMemoFor(targetClaimPostId); // patch_h2_score_memo + patch_game_b
         if (maxIn > 0 && n > maxIn) {
-            uint256 thisStake = _totalStake(linkPostId);
+            uint256 thisStake = _totalStake(linkPostId, memo);
             uint256 ahead = 0;
             for (uint256 i = 0; i < n; i++) {
                 if (i == idx) {
                     continue;
                 }
-                uint256 si = _totalStake(inc[i].linkPostId);
+                uint256 si = _totalStake(inc[i].linkPostId, memo);
                 if (si > thisStake) {
                     ahead++;
                 } else if (si == thisStake && inc[i].linkPostId < linkPostId) {
@@ -480,13 +536,19 @@ contract ScoreEngine is GovernedUpgradeable {
         }
 
         uint256[] memory computing = new uint256[](MAX_DEPTH + 1);
-        VSMemo memory memo = _newMemo(); // patch_h2_score_memo
         (contrib,) = _computeEdgeContribution(inc[idx], computing, memo, 0, fee);
         return contrib;
     }
 
-    function _totalStake(uint256 postId) internal view returns (uint256) {
-        (uint256 s, uint256 d) = stake.getPostTotals(postId);
+    /// @dev patch_game_b: LIVE direct total — activity gates are a property of the post
+    ///      (is it real and staked enough), not of its time-weighted mass.
+    function _liveTotal(uint256 postId) internal view returns (uint256) {
+        (uint256 s_, uint256 d_) = stake.getPostTotals(postId);
+        return s_ + d_;
+    }
+
+    function _totalStake(uint256 postId, VSMemo memory memo) internal view returns (uint256) {
+        (uint256 s, uint256 d) = _totals(postId, memo); // patch_game_b: time-weighted
         return s + d;
     }
 
@@ -507,7 +569,7 @@ contract ScoreEngine is GovernedUpgradeable {
     ///      siblings' shares (excluded from sum), and
     ///      _computeEdgeContribution will short-circuit it via
     ///      protocolPolicy.isActive.
-    function _sumOutgoingLinkStake(uint256 claimPostId, uint256 fee)
+    function _sumOutgoingLinkStake(uint256 claimPostId, uint256 fee, VSMemo memory memo)
         internal
         view
         returns (uint256 sum, uint256 thresholdStake, uint256 thresholdPostId)
@@ -524,7 +586,7 @@ contract ScoreEngine is GovernedUpgradeable {
         if (maxOut > 0 && n > maxOut) {
             uint256[] memory stakes = new uint256[](n);
             for (uint256 i = 0; i < n; i++) {
-                stakes[i] = _totalStake(outs[i].linkPostId);
+                stakes[i] = _totalStake(outs[i].linkPostId, memo);
             }
             // Insertion sort (view call, no gas limit; n typically < 200)
             for (uint256 i = 1; i < n; i++) {
@@ -552,8 +614,9 @@ contract ScoreEngine is GovernedUpgradeable {
         }
 
         for (uint256 i = 0; i < n; i++) {
-            uint256 t = _totalStake(outs[i].linkPostId);
-            if (t >= fee) {
+            uint256 t = _totalStake(outs[i].linkPostId, memo);
+            if (_liveTotal(outs[i].linkPostId) >= fee) {
+                // patch_game_b: active by LIVE stake, summed time-weighted
                 sum += t;
             }
         }
