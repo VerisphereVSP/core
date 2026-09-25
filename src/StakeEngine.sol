@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IVSPToken.sol";
+import "./lib/TimeWeighted.sol";
 
 /// @dev patch_game_b: the only ScoreEngine surface settlement needs.
 interface IScoreEngineV2 {
@@ -105,7 +106,9 @@ contract StakeEngine is GovernedUpgradeable {
     uint256 private _reentrancyStatus;
 
     modifier nonReentrant() {
-        require(_reentrancyStatus != _ENTERED, "ReentrancyGuard: reentrant call");
+        if (_reentrancyStatus == _ENTERED) {
+            revert Reentrant();
+        }
         _reentrancyStatus = _ENTERED;
         _;
         _reentrancyStatus = _NOT_ENTERED;
@@ -169,28 +172,15 @@ contract StakeEngine is GovernedUpgradeable {
     uint256 private constant DEFAULT_SMAX_DECAY_RATE_RAY = 9e17; // 10% daily decay
 
     // ── patch_game_b (whitepaper v17): evidence-economic settlement ───────────
-    /// @dev One observation per stake change: totals at `ts` and the running
-    ///      integrals ∫A dt, ∫D dt up to `ts`. Time-weighted totals over any window
-    ///      are (cum(t1) - cum(t0)) / (t1 - t0) with cum(t) extrapolated from the last
-    ///      observation at or before t. APPENDED storage; slot order is layout-checked.
-    struct Observation {
-        uint64 ts;
-        uint96 support;
-        uint96 challenge;
-        uint256 cumSupport;
-        uint256 cumChallenge;
-    }
-
     /// @notice Gas a user transaction may spend on the inline settlement before it is deferred
     ///         to the keeper (`SettleFirst`). updatePost() is unbounded.
-    uint256 public constant USER_SETTLE_GAS = 3_000_000;
+    uint256 internal constant USER_SETTLE_GAS = 3_000_000;
 
     error SettleFirst(uint256 postId);
+    error TransferFailed(); // EIP-170: replaces 5 revert strings
+    error Reentrant();
     error InexactScore(uint256 postId);
-    error NotSelf();
-    error ObservationOverflow(uint256 total);
 
-    event ScoreEngineSet(address indexed previous, address indexed current);
     uint256 private constant DEFAULT_SMAX_DECAY_MAX_EPOCHS = 30; // Full decay in ~30 days
 
     // ------------------------------------------------------------
@@ -383,9 +373,7 @@ contract StakeEngine is GovernedUpgradeable {
 
     /// @notice patch_game_b: wire the ScoreEngine whose effective pool settlement pays on.
     function setScoreEngine(address newScoreEngine) external onlyGovernance {
-        address old = address(scoreEngine);
         scoreEngine = IScoreEngineV2(newScoreEngine);
-        emit ScoreEngineSet(old, newScoreEngine);
     }
 
     function setProtocolPolicy(address newProtocolPolicy) external onlyGovernance {
@@ -492,96 +480,20 @@ contract StakeEngine is GovernedUpgradeable {
     }
 
     /// @notice patch_game_b (v17 §4.2.5): direct side totals time-weighted over [t0, t1].
-    ///         t1 <= t0, or a post with no observations yet (pre-upgrade posts before their first
-    ///         change), returns the live totals.
+    ///         t1 <= t0, or a post with no observations yet, returns the live totals.
     function getTimeWeightedTotals(uint256 postId, uint256 t0, uint256 t1)
         external
         view
         returns (uint256 support, uint256 challenge)
     {
-        Observation[] storage obs = observations[postId];
         PostState storage ps = posts[postId];
-        if (t1 <= t0 || obs.length == 0) {
-            return (ps.sides[0].total, ps.sides[1].total);
-        }
-        (uint256 a1, uint256 d1) = _cumAt(obs, t1);
-        (uint256 a0, uint256 d0) = _cumAt(obs, t0);
-        uint256 span = t1 - t0;
-        return ((a1 - a0) / span, (d1 - d0) / span);
-    }
-
-    /// @dev cum(t): integral of the side totals from the first observation to t.
-    function _cumAt(Observation[] storage obs, uint256 t) internal view returns (uint256 cumA, uint256 cumD) {
-        uint256 n = obs.length;
-        if (t < obs[0].ts) {
-            return (0, 0); // before the post existed
-        }
-        // binary search: largest i with obs[i].ts <= t
-        uint256 lo = 0;
-        uint256 hi = n - 1;
-        while (lo < hi) {
-            uint256 mid = (lo + hi + 1) / 2;
-            if (obs[mid].ts <= t) {
-                lo = mid;
-            } else {
-                hi = mid - 1;
-            }
-        }
-        Observation storage o = obs[lo];
-        uint256 dt = t - o.ts;
-        return (o.cumSupport + uint256(o.support) * dt, o.cumChallenge + uint256(o.challenge) * dt);
+        return observations[postId].totals(t0, t1, ps.sides[0].total, ps.sides[1].total);
     }
 
     /// @dev Record the current totals. Called after every change to a side total.
     function _observe(uint256 postId) internal {
-        Observation[] storage obs = observations[postId];
         PostState storage ps = posts[postId];
-        uint256 A = ps.sides[0].total;
-        uint256 D = ps.sides[1].total;
-        if (A > type(uint96).max || D > type(uint96).max) {
-            revert ObservationOverflow(A > D ? A : D);
-        }
-        uint256 n = obs.length;
-        if (n == 0) {
-            obs.push(Observation(uint64(block.timestamp), uint96(A), uint96(D), 0, 0));
-            return;
-        }
-        Observation storage last = obs[n - 1];
-        if (last.ts == block.timestamp) {
-            last.support = uint96(A);
-            last.challenge = uint96(D);
-            return;
-        }
-        uint256 dt = block.timestamp - last.ts;
-        obs.push(
-            Observation(
-                uint64(block.timestamp),
-                uint96(A),
-                uint96(D),
-                last.cumSupport + uint256(last.support) * dt,
-                last.cumChallenge + uint256(last.challenge) * dt
-            )
-        );
-    }
-
-    /// @dev Bootstrap for posts that existed before the upgrade: the first observation is seeded
-    ///      with the PRE-change totals at the post's window start, so their standing stake counts
-    ///      as present for the window rather than as created at this instant.
-    function _seedObservationIfLegacy(uint256 postId) internal {
-        if (observations[postId].length != 0) {
-            return;
-        }
-        PostState storage ps = posts[postId];
-        uint256 A = ps.sides[0].total;
-        uint256 D = ps.sides[1].total;
-        if (A + D == 0) {
-            return;
-        }
-        uint256 wStart = ps.lastSnapshotEpoch * EPOCH_LENGTH;
-        if (wStart == 0 || wStart >= block.timestamp) {
-            return;
-        }
-        observations[postId].push(Observation(uint64(wStart), uint96(A), uint96(D), 0, 0));
+        observations[postId].observe(ps.sides[0].total, ps.sides[1].total);
     }
 
     /// @dev User path: settle inline within USER_SETTLE_GAS or defer to the keeper.
@@ -595,7 +507,7 @@ contract StakeEngine is GovernedUpgradeable {
     /// @notice Self-call target for the bounded inline settlement. Not callable externally.
     function settleSelf(uint256 postId) external {
         if (msg.sender != address(this)) {
-            revert NotSelf();
+            revert NotGuardianOrGovernance(); // self-call only
         }
         _maybeSnapshot(postId, _currentEpoch());
     }
@@ -707,13 +619,14 @@ contract StakeEngine is GovernedUpgradeable {
                 revert LotExceedsCap(lotAfter, MAX_STAKE_AMOUNT);
             }
         }
-        require(ERC20_TOKEN.transferFrom(_msgSender(), address(this), amount), "VSP transfer failed");
+        if (!ERC20_TOKEN.transferFrom(_msgSender(), address(this), amount)) {
+            revert TransferFailed();
+        }
         PostState storage ps = posts[postId];
         uint256 epoch = _currentEpoch();
         if (ps.lastSnapshotEpoch == 0) {
             ps.lastSnapshotEpoch = epoch;
         }
-        _seedObservationIfLegacy(postId); // patch_game_b
         _settleBounded(postId); // patch_game_b: inline within USER_SETTLE_GAS, else SettleFirst
         _increaseUser(postId, side, amount, _msgSender()); // patch_h1a_bucket
         emit StakeAdded(postId, _msgSender(), side, amount);
@@ -740,7 +653,6 @@ contract StakeEngine is GovernedUpgradeable {
         }
         PostState storage ps = posts[postId];
         uint256 epoch = _currentEpoch();
-        _seedObservationIfLegacy(postId); // patch_game_b
         _settleBounded(postId); // patch_game_b: inline within USER_SETTLE_GAS, else SettleFirst
         // patch_h1a_bucket: unified ranked/bucket decrease (both bounded)
         if (_userAmount(ps, side, _msgSender()) < amount) {
@@ -748,7 +660,9 @@ contract StakeEngine is GovernedUpgradeable {
         }
         uint256 removed = _decreaseUser(postId, side, amount, _msgSender());
         _updateSMax(postId, settledTotal[postId]); // ruling 3b: settled, not live
-        require(ERC20_TOKEN.transfer(_msgSender(), removed), "VSP transfer failed");
+        if (!ERC20_TOKEN.transfer(_msgSender(), removed)) {
+            revert TransferFailed();
+        }
         emit StakeWithdrawn(postId, _msgSender(), side, removed, true);
     }
 
@@ -757,7 +671,6 @@ contract StakeEngine is GovernedUpgradeable {
     // ------------------------------------------------------------
 
     function updatePost(uint256 postId) external nonReentrant {
-        _seedObservationIfLegacy(postId); // patch_game_b
         uint256 epoch = _currentEpoch();
         _forceSnapshot(postId, epoch);
     }
@@ -785,7 +698,6 @@ contract StakeEngine is GovernedUpgradeable {
         }
         PostState storage ps = posts[postId];
         uint256 epoch = _currentEpoch();
-        _seedObservationIfLegacy(postId); // patch_game_b
         _settleBounded(postId); // patch_game_b: inline within USER_SETTLE_GAS, else SettleFirst
         address user = _msgSender();
 
@@ -807,7 +719,9 @@ contract StakeEngine is GovernedUpgradeable {
             }
             if (absTarget > currentSup) {
                 uint256 toStake = absTarget - currentSup;
-                require(ERC20_TOKEN.transferFrom(user, address(this), toStake), "VSP transfer failed");
+                if (!ERC20_TOKEN.transferFrom(user, address(this), toStake)) {
+                    revert TransferFailed();
+                }
                 _increaseUser(postId, 0, toStake, user); // patch_h1a_bucket
                 emit StakeAdded(postId, user, 0, toStake);
             } else if (absTarget < currentSup) {
@@ -819,7 +733,9 @@ contract StakeEngine is GovernedUpgradeable {
             }
             if (absTarget > currentChal) {
                 uint256 toStake = absTarget - currentChal;
-                require(ERC20_TOKEN.transferFrom(user, address(this), toStake), "VSP transfer failed");
+                if (!ERC20_TOKEN.transferFrom(user, address(this), toStake)) {
+                    revert TransferFailed();
+                }
                 _increaseUser(postId, 1, toStake, user); // patch_h1a_bucket
                 emit StakeAdded(postId, user, 1, toStake);
             } else if (absTarget < currentChal) {
@@ -840,7 +756,9 @@ contract StakeEngine is GovernedUpgradeable {
         if (removed == 0) {
             return;
         }
-        require(ERC20_TOKEN.transfer(user, removed), "VSP transfer failed");
+        if (!ERC20_TOKEN.transfer(user, removed)) {
+            revert TransferFailed();
+        }
         emit StakeWithdrawn(postId, user, side, removed, true);
     }
 
@@ -889,6 +807,11 @@ contract StakeEngine is GovernedUpgradeable {
             return;
         }
 
+        // patch_game_b: legacy posts (pre-upgrade) get their first observation at the window
+        // start with the pre-settlement totals, so standing stake counts for this window.
+        if (T != 0) {
+            observations[postId].seed(lastEpoch * EPOCH_LENGTH, A, D);
+        }
         // patch_game_b (v17 §3.2): truth pressure and the accruing side come from the
         // effective pool over this window; participation stays on direct T.
         uint256 S = A;
@@ -907,20 +830,19 @@ contract StakeEngine is GovernedUpgradeable {
             return;
         }
         bool supportWins = S > C;
-        uint256 absVS = supportWins ? S - C : C - S;
-        uint256 epochsElapsed = currentEpoch - lastEpoch;
-        uint256 vRay = (absVS * RAY) / (S + C);
-        // patch_prC_rulings S-04 (ratified): participation deliberately couples
-        // every post's rate to the GLOBAL leader via sMax — smaller posts earn a
-        // scaled-down rate by design; this is the intended cross-post coupling.
-        uint256 participationRay = (T * RAY) / sMax;
-        if (participationRay > RAY) {
-            participationRay = RAY;
-        }
-
-        uint256 rMin = (protocolPolicy.stakeIntRateMinRay() * EPOCH_LENGTH * epochsElapsed) / YEAR_LENGTH;
-        uint256 rMax = (protocolPolicy.stakeIntRateMaxRay() * EPOCH_LENGTH * epochsElapsed) / YEAR_LENGTH;
-        uint256 rBase = rMin + ((rMax - rMin) * vRay * participationRay) / (RAY * RAY);
+        // patch_prC_rulings S-04 (ratified): participation deliberately couples every post's
+        // rate to the GLOBAL leader via sMax (see TimeWeighted.rBase; moved out for EIP-170).
+        uint256 rBase = TimeWeighted.rBase(
+            S,
+            C,
+            T,
+            sMax,
+            protocolPolicy.stakeIntRateMinRay(),
+            protocolPolicy.stakeIntRateMaxRay(),
+            EPOCH_LENGTH,
+            currentEpoch - lastEpoch,
+            YEAR_LENGTH
+        );
 
         // Apply epoch gains/losses (positions that exceed sideTotal are
         // safely clamped to zero weight inside _applyEpoch; midpoint
@@ -1856,7 +1778,8 @@ contract StakeEngine is GovernedUpgradeable {
         q.total = total + _bucketLive(q); // patch_h1a_bucket
     }
     // ── patch_game_b: two slots consumed from __gap (495 -> 493); layout re-baselined deliberately ──
-    mapping(uint256 => Observation[]) internal observations;
+    mapping(uint256 => TimeWeighted.Observation[]) internal observations;
+    using TimeWeighted for TimeWeighted.Observation[];
     /// @dev ScoreEngine that supplies the effective pool at settlement (v17 §3.2). address(0) =
     ///      unwired (test harnesses): settlement uses direct totals, as v16 did.
     IScoreEngineV2 public scoreEngine;

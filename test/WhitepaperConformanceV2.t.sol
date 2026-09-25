@@ -268,7 +268,7 @@ contract WhitepaperConformanceV2Test is WhitepaperConformanceTest {
         (,, bool exact) = score.effectivePoolWindow(root, se.getLastSnapshotEpoch(root) * EPOCH, block.timestamp);
         uint256 walk = g0 - gasleft();
         assertTrue(exact);
-        assertGt(walk, se.USER_SETTLE_GAS(), "fixture must exceed the user budget");
+        assertGt(walk, 3_000_000, "fixture must exceed the user budget (USER_SETTLE_GAS)");
         vm.prank(C);
         vm.expectRevert(abi.encodeWithSelector(StakeEngine.SettleFirst.selector, root));
         se.stake(root, 0, 1e18);
