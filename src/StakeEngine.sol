@@ -179,7 +179,6 @@ contract StakeEngine is GovernedUpgradeable {
     error SettleFirst(uint256 postId);
     error TransferFailed(); // EIP-170: replaces 5 revert strings
     error Reentrant();
-    error InexactScore(uint256 postId);
 
     uint256 private constant DEFAULT_SMAX_DECAY_MAX_EPOCHS = 30; // Full decay in ~30 days
 
@@ -817,12 +816,12 @@ contract StakeEngine is GovernedUpgradeable {
         uint256 S = A;
         uint256 C = D;
         if (address(scoreEngine) != address(0)) {
-            bool exact;
-            (S, C, exact) =
-                scoreEngine.effectivePoolWindow(postId, lastEpoch * EPOCH_LENGTH, currentEpoch * EPOCH_LENGTH);
-            if (!exact) {
-                revert InexactScore(postId);
-            }
+            // fix_cycle_freeze (report 2026-09-26, Ibnu76): `exact` is the walk's MEMO flag ("depends on
+            // the arrival path, do not cache"), not a correctness flag. A cycle-cut or depth-truncated
+            // contribution is 0 BY DEFINITION (whitepaper §4.3), and the settling post's pool is
+            // deterministic for that root. Refusing to settle on !exact let anyone freeze any claim for
+            // ~10 VSP by linking a 2-node cycle above it. Settlement never inspects the flag.
+            (S, C,) = scoreEngine.effectivePoolWindow(postId, lastEpoch * EPOCH_LENGTH, currentEpoch * EPOCH_LENGTH);
         }
         if (S == C) {
             ps.lastSnapshotEpoch = currentEpoch;
