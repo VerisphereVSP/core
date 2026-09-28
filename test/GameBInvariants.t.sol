@@ -20,7 +20,7 @@ contract GameBHandler is ProtocolHandler {
     {}
 
     /// Epoch step: advance 1..7 days and settle EVERY post, recording any revert.
-    function hEpoch(uint256 daysSeed) public {
+    function hEpoch(uint256 daysSeed) public virtual {
         uint256 nDays = bound(daysSeed, 1, 7);
         vm.warp(block.timestamp + nDays * 1 days);
         uint256 n = allPosts.length;
@@ -35,7 +35,7 @@ contract GameBHandler is ProtocolHandler {
     }
 
     /// Deliberate 2-cycles between random claims (the reported shape), staked so they are active.
-    function hCycle(uint256 aSeed, uint256 bSeed, uint256 actorSeed) public {
+    function hCycle(uint256 aSeed, uint256 bSeed, uint256 actorSeed) public virtual {
         if (claims.length < 2 || allPosts.length + 2 > MAX_POSTS) {
             return;
         }
