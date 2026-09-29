@@ -97,7 +97,7 @@ contract ProtocolHandler is Test {
 
     // ───────────────────────── fuzzed actions ─────────────────────────
 
-    function hCreateClaim(uint256 aSeed) public {
+    function hCreateClaim(uint256 aSeed) public virtual {
         if (claims.length >= MAX_CLAIMS) {
             return;
         }
@@ -110,7 +110,7 @@ contract ProtocolHandler is Test {
         } catch {}
     }
 
-    function hCreateLink(uint256 fSeed, uint256 tSeed, uint256 aSeed, bool isChallenge) public {
+    function hCreateLink(uint256 fSeed, uint256 tSeed, uint256 aSeed, bool isChallenge) public virtual {
         if (claims.length < 2) {
             return;
         }
@@ -129,7 +129,7 @@ contract ProtocolHandler is Test {
         } catch {}
     }
 
-    function hStake(uint256 pSeed, uint256 aSeed, uint8 sideIn, uint256 amtSeed) public {
+    function hStake(uint256 pSeed, uint256 aSeed, uint8 sideIn, uint256 amtSeed) public virtual {
         if (allPosts.length == 0) {
             return;
         }
@@ -153,7 +153,7 @@ contract ProtocolHandler is Test {
         } catch {}
     }
 
-    function hWithdraw(uint256 pSeed, uint256 aSeed, uint256 amtSeed) public {
+    function hWithdraw(uint256 pSeed, uint256 aSeed, uint256 amtSeed) public virtual {
         if (allPosts.length == 0) {
             return;
         }
@@ -190,7 +190,7 @@ contract ProtocolHandler is Test {
     /// Totals are read BEFORE the warp (state is settled at entry, so
     /// getPostTotals is stored, not projected) and again after each
     /// updatePost; the delta is settlement's net effect on principal.
-    function hWarp(uint256 daysSeed) public {
+    function hWarp(uint256 daysSeed) public virtual {
         uint256 nDays = bound(daysSeed, 1, 7);
         uint256 n = allPosts.length;
         uint256[] memory beforeT = new uint256[](n);
