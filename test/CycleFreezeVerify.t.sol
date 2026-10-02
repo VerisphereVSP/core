@@ -113,6 +113,14 @@ contract CycleFreezeVerify is Test {
         }
     }
 
+    /// v18: seed every outgoing link-post of a claim (snapshots are per post).
+    function _seedLinksOf(uint256 claimId) internal {
+        LinkGraph.Edge[] memory outs = graph.getOutgoing(claimId);
+        for (uint256 k = 0; k < outs.length; k++) {
+            score.seedSnapshot(outs[k].linkPostId);
+        }
+    }
+
     /// A permissionless 2-cycle upstream of the victim taints its settlement
     /// forever: the cycle-cut in ScoreEngine returns exact=false, the flag
     /// propagates down to the victim, and StakeEngine._forceSnapshot then reverts
@@ -126,10 +134,12 @@ contract CycleFreezeVerify is Test {
         uint256 v = _claim("victim", CLAIM_STAKE);
         _link(x, v, LINK_STAKE);
 
-        // the walk still marks the result non-cacheable ...
-        (,, bool exact) = score.effectivePoolWindow(v, 0, 1 days);
-        assertFalse(exact, "cycle-cut results are not memoized (by design)");
-        (uint256 S, uint256 C,) = score.effectivePool(v); // instantaneous pool for the value
+        // v18: no walk, no memo flag — the pool is read from snapshots; seed the standing graph
+        score.seedSnapshot(x);
+        score.seedSnapshot(y);
+        _seedLinksOf(x);
+        _seedLinksOf(y);
+        (uint256 S, uint256 C,) = score.effectivePool(v);
         // ... but the VALUE is the whitepaper's: X contributes its mass (X's incoming from Y is cut to 0,
         // X itself is +100% with CLAIM_STAKE), so victim S = own + X's share, C = 0
         assertGt(S, CLAIM_STAKE, "X's support reaches the victim");

@@ -46,10 +46,15 @@ abstract contract GovernedUpgradeable is Initializable, UUPSUpgradeable, ERC2771
     ///      the timelock with the forwarder key. Governance actions are not
     ///      gasless actions; they must not pass through a forwarder.
     modifier onlyGovernance() {
+        _checkGovernance();
+        _;
+    }
+
+    /// @dev Out-of-line so the check is one CALL per use instead of an inlined body (EIP-170 budget).
+    function _checkGovernance() internal view {
         if (msg.sender != governance) {
             revert NotGovernance();
         }
-        _;
     }
 
     function _authorizeUpgrade(address) internal override onlyGovernance {}

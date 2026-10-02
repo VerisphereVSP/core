@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "@openzeppelin/contracts/utils/math/Math.sol";
+
 /// @title TimeWeighted — per-post observations and window averages (whitepaper v17 §4.2.5)
 /// @notice External library (deployed once, delegate-called) so the StakeEngine stays under the
 ///         EIP-170 runtime size limit. One observation per stake change: the side totals at `ts`
@@ -17,7 +19,20 @@ library TimeWeighted {
     }
 
     /// @dev Record the current totals at block.timestamp (same-second updates overwrite).
+    /// @dev review R3 H-1: the packed fields are uint96; totals above 2^96 - 1 (~7.9e28 wei, ~79x the
+    ///      supply cap) revert instead of truncating silently.
+    error Fits96();
+
+    function _fits96(uint256 x) internal pure returns (uint96) {
+        if (x > type(uint96).max) {
+            revert Fits96();
+        }
+        return uint96(x);
+    }
+
     function observe(Observation[] storage obs, uint256 A, uint256 D) external {
+        _fits96(A);
+        _fits96(D);
         uint256 n = obs.length;
         if (n == 0) {
             obs.push(Observation(uint64(block.timestamp), uint96(A), uint96(D), 0, 0));
@@ -88,6 +103,152 @@ library TimeWeighted {
         uint256 rMin = (rMinAnnualRay * epochLength * epochsElapsed) / yearLength;
         uint256 rMax = (rMaxAnnualRay * epochLength * epochsElapsed) / yearLength;
         return rMin + ((rMax - rMin) * vRay * participationRay) / (RAY * RAY);
+    }
+
+    /// @dev whitepaper §3.2: one lot's settlement delta — amount × rBase × midpoint weight, prorated by
+    ///      the share of [wStart, wEnd) the lot was present for (et = amount-weighted entry time; 0 or
+    ///      wEnd == 0 means no proration). Shared by settlement and projection (spec V.8).
+    function lotDelta(
+        uint256 amount,
+        uint256 weightedPosition,
+        uint256 sideTotal,
+        uint256 rBase,
+        uint256 et,
+        uint256 wStart,
+        uint256 wEnd
+    ) external pure returns (uint256 delta) {
+        uint256 RAY = 1e18;
+        uint256 behind = weightedPosition < sideTotal ? sideTotal - weightedPosition : 0;
+        uint256 midpointRate = (behind * RAY) / sideTotal;
+        if (midpointRate > RAY) {
+            midpointRate = RAY;
+        }
+        delta = Math.mulDiv(amount * rBase, midpointRate, RAY * RAY);
+        if (wEnd > wStart && et > wStart) {
+            uint256 present = et < wEnd ? wEnd - et : 0;
+            delta = Math.mulDiv(delta, present, wEnd - wStart);
+        }
+    }
+
+    /// @dev The pooled tail bucket's index after one settlement: the bucket sits at the tail midpoint,
+    ///      its rate is prorated by presence like a lot (review R3 F-B), and the index floors at 1 wei
+    ///      (S-01). Shared by settlement and projection.
+    function bucketIndexAfter(
+        uint256 ix,
+        uint256 live,
+        uint256 sideTotal,
+        uint256 rBase,
+        bool aligned,
+        uint256 et,
+        uint256 wStart,
+        uint256 wEnd
+    ) external pure returns (uint256 newIx) {
+        uint256 RAY = 1e18;
+        uint256 wPosB = (sideTotal - live) + live / 2;
+        uint256 behind = wPosB < sideTotal ? sideTotal - wPosB : 0;
+        uint256 gRay = (rBase * behind) / sideTotal;
+        if (wEnd > wStart && et > wStart) {
+            uint256 present = et < wEnd ? wEnd - et : 0;
+            gRay = Math.mulDiv(gRay, present, wEnd - wStart);
+        }
+        if (aligned) {
+            newIx = (ix * (RAY + gRay)) / RAY;
+        } else {
+            newIx = gRay >= RAY ? 0 : (ix * (RAY - gRay)) / RAY;
+        }
+        if (newIx == 0) {
+            newIx = 1;
+        }
+    }
+
+    // ── sMax tracker (moved out of StakeEngine for EIP-170; patch_settlement_snapshots) ──────────
+
+    struct TopPost {
+        uint256 postId;
+        uint256 total;
+    }
+
+    /// @dev Insert/update `postId` with `postTotal` in the 10-slot descending tracker, dropping it
+    ///      when the total is 0, and return the leader. Same algorithm as StakeEngine._updateSMax
+    ///      had (S-03 layer iii).
+    function trackerUpdate(TopPost[10] storage topPosts, uint256 postId, uint256 postTotal)
+        external
+        returns (uint256 leaderTotal, uint256 leaderId)
+    {
+        uint256 n = 10;
+        uint256 slot = type(uint256).max;
+        for (uint256 i = 0; i < n; i++) {
+            if (topPosts[i].postId == postId && topPosts[i].total > 0) {
+                slot = i;
+                break;
+            }
+        }
+        if (slot != type(uint256).max) {
+            topPosts[slot].total = postTotal;
+            while (slot > 0 && topPosts[slot].total > topPosts[slot - 1].total) {
+                TopPost memory tmp = topPosts[slot];
+                topPosts[slot] = topPosts[slot - 1];
+                topPosts[slot - 1] = tmp;
+                slot--;
+            }
+            while (slot < n - 1 && topPosts[slot].total < topPosts[slot + 1].total) {
+                TopPost memory tmp = topPosts[slot];
+                topPosts[slot] = topPosts[slot + 1];
+                topPosts[slot + 1] = tmp;
+                slot++;
+            }
+        } else {
+            for (uint256 i = 0; i < n; i++) {
+                if (postTotal > topPosts[i].total) {
+                    for (uint256 j = n - 1; j > i; j--) {
+                        topPosts[j] = topPosts[j - 1];
+                    }
+                    topPosts[i] = TopPost(postId, postTotal);
+                    break;
+                }
+            }
+        }
+        for (uint256 i = 0; i < n; i++) {
+            if (topPosts[i].total == 0) {
+                topPosts[i] = TopPost(0, 0);
+            }
+        }
+        return (topPosts[0].total, topPosts[0].postId);
+    }
+
+    /// @dev sMax after `elapsed` epochs of exponential decay (elapsed already capped by the caller).
+    function decay(uint256 sMax, uint256 rateRay, uint256 elapsed) external pure returns (uint256 decayed) {
+        decayed = sMax;
+        for (uint256 i = 0; i < elapsed; i++) {
+            decayed = (decayed * rateRay) / 1e18;
+            if (decayed == 0) {
+                break;
+            }
+        }
+    }
+
+    /// @dev The sMax a settlement of a post with direct total T would divide by right now: the tracker
+    ///      registers T first (so the leader is at least T), then either rises to the leader or decays
+    ///      toward it — exactly StakeEngine._updateSMax, read-only (spec V.8: view == materialised).
+    function projectSMax(uint256 sMax, uint256 leader, uint256 T, uint256 rateRay, uint256 elapsedCapped)
+        external
+        pure
+        returns (uint256)
+    {
+        if (T > leader) {
+            leader = T;
+        }
+        if (leader >= sMax) {
+            return leader;
+        }
+        uint256 decayed = sMax;
+        for (uint256 i = 0; i < elapsedCapped; i++) {
+            decayed = (decayed * rateRay) / 1e18;
+            if (decayed == 0) {
+                break;
+            }
+        }
+        return decayed < leader ? leader : decayed;
     }
 
     /// @dev cum(t): integral of the side totals from the first observation to t.

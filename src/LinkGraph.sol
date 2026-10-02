@@ -40,11 +40,45 @@ contract LinkGraph is GovernedUpgradeable {
     mapping(uint256 => uint256) private _unused_visited;
     uint256 private _unused_visitToken;
     uint256 public constant MAX_VISITS = 4096; // kept for ABI compat
-    uint256 public constant MAX_OUTGOING_LINKS_PER_CLAIM = 1000; // bundle05_c
-    uint256 public constant MAX_INCOMING_LINKS_PER_CLAIM = 1000; // bundle05_c
+    /// @notice Default structural caps (bundle05_c). Since v18 (patch_settlement_snapshots, ruling D4)
+    ///         the live caps are governance-settable via setLinkCaps; 0 in storage means "default".
+    uint256 public constant MAX_OUTGOING_LINKS_PER_CLAIM = 1000; // bundle05_c default
+    uint256 public constant MAX_INCOMING_LINKS_PER_CLAIM = 1000; // bundle05_c default
+    uint256 public constant ABSOLUTE_MAX_LINKS_PER_CLAIM = 2000; // v18: settlement at 1000 incoming fits a 32M block with margin
 
     // Duplicate edge detection: keccak256(from, to, isChallenge) => true
     mapping(bytes32 => bool) private edgeExists;
+
+    /// @dev v18 settable caps (two gap slots). 0 = default constant.
+    uint256 internal _maxOutgoing;
+    uint256 internal _maxIncoming;
+
+    event LinkCapsSet(uint256 maxIncoming, uint256 maxOutgoing);
+
+    error InvalidLinkCap();
+
+    /// @notice Live per-claim caps.
+    function maxIncomingLinksPerClaim() public view returns (uint256) {
+        return _maxIncoming == 0 ? MAX_INCOMING_LINKS_PER_CLAIM : _maxIncoming;
+    }
+
+    function maxOutgoingLinksPerClaim() public view returns (uint256) {
+        return _maxOutgoing == 0 ? MAX_OUTGOING_LINKS_PER_CLAIM : _maxOutgoing;
+    }
+
+    /// @notice Governance: set the structural caps within [64, ABSOLUTE_MAX_LINKS_PER_CLAIM]. Existing
+    ///         edges above a lowered cap are grandfathered (only new addEdge calls are checked).
+    function setLinkCaps(uint256 maxIncoming_, uint256 maxOutgoing_) external onlyGovernance {
+        if (
+            maxIncoming_ < 64 || maxOutgoing_ < 64 || maxIncoming_ > ABSOLUTE_MAX_LINKS_PER_CLAIM
+                || maxOutgoing_ > ABSOLUTE_MAX_LINKS_PER_CLAIM
+        ) {
+            revert InvalidLinkCap();
+        }
+        _maxIncoming = maxIncoming_;
+        _maxOutgoing = maxOutgoing_;
+        emit LinkCapsSet(maxIncoming_, maxOutgoing_);
+    }
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(address trustedForwarder_) GovernedUpgradeable(trustedForwarder_) {}
@@ -90,11 +124,11 @@ contract LinkGraph is GovernedUpgradeable {
         // addEdge calls. >= cap means the 1000th push is rejected, so the
         // stored length never exceeds MAX_*_LINKS_PER_CLAIM.
         uint256 outLen_b05c = outgoing[fromClaimPostId].length;
-        if (outLen_b05c >= MAX_OUTGOING_LINKS_PER_CLAIM) {
+        if (outLen_b05c >= maxOutgoingLinksPerClaim()) {
             revert OutgoingLinkLimitExceeded(fromClaimPostId, outLen_b05c);
         }
         uint256 inLen_b05c = incoming[toClaimPostId].length;
-        if (inLen_b05c >= MAX_INCOMING_LINKS_PER_CLAIM) {
+        if (inLen_b05c >= maxIncomingLinksPerClaim()) {
             revert IncomingLinkLimitExceeded(toClaimPostId, inLen_b05c);
         }
 
@@ -132,5 +166,5 @@ contract LinkGraph is GovernedUpgradeable {
         return tos;
     }
 
-    uint256[500] private __gap;
+    uint256[498] private __gap; // 500 -> 498 (_maxOutgoing, _maxIncoming) v18 settable caps
 }

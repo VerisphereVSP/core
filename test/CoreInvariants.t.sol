@@ -214,6 +214,38 @@ contract CoreHandler is GameBHandler {
         }
     }
 
+    /// patch_settlement_snapshots: a keeper pass in the WRONG order after a skipped epoch — advance
+    /// 2..7 epochs (so every snapshot is now stale), settle one parity class first (its children read
+    /// stale ancestors: StaleParentUsed, never a revert), then the other. State is fully settled at
+    /// the end, as every invariant here assumes.
+    function hEpochPartial(uint256 daysSeed, uint256 parity) public {
+        uint256 nDays = bound(daysSeed, 2, 7);
+        uint256 n = allPosts.length;
+        uint256[] memory t0 = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            (uint256 a, uint256 d) = stakeEng.getPostTotals(allPosts[i]);
+            t0[i] = a + d;
+        }
+        vm.warp(block.timestamp + nDays * 1 days);
+        for (uint256 pass = 0; pass < 2; pass++) {
+            for (uint256 i = 0; i < n; i++) {
+                if ((i + (parity % 2) + pass) % 2 != 0) {
+                    continue;
+                }
+                try stakeEng.updatePost(allPosts[i]) {
+                    settled++;
+                    settlements++;
+                } catch (bytes memory reason) {
+                    settleReverts++;
+                    lastRevert = reason;
+                    continue;
+                }
+                (uint256 a1, uint256 d1) = stakeEng.getPostTotals(allPosts[i]);
+                ghostSettleNet += int256(a1 + d1) - int256(t0[i]);
+            }
+        }
+    }
+
     /// The base warp action is folded into hEpoch so every settlement is counted and checked.
     function hWarp(uint256 daysSeed) public override {
         hEpoch(daysSeed);
@@ -351,13 +383,9 @@ contract CoreInvariantsTest is Test {
     }
 
     /// PROJECTION == SETTLEMENT (spec V.8): what getPostTotals shows before settlement is what
-    /// settlement pays. FINDING CI-1 (2026-09-28): fails on main — _projectTotals still rates on
-    /// direct verity with live totals and no proration (pre-#27 math). Gated until the fix lands;
-    /// run with CORE_INV_PENDING=1 to see it.
+    /// settlement pays. Finding CI-1 (2026-09-28) — closed by patch_settlement_snapshots: one rate
+    /// path (_projectRate / TimeWeighted.lotDelta / bucketIndexAfter / projectSMax) for both.
     function invariant_projectionMatchesSettlement() public view {
-        if (!vm.envOr("CORE_INV_PENDING", false)) {
-            return;
-        }
         assertEq(
             handler.projectionMismatches(),
             0,
@@ -431,6 +459,30 @@ contract CoreInvariantsTest is Test {
         assertLe(rhs - lhs, int256(handler.ghostOps() + handler.settlements()), "conservation gap above dust");
     }
 
+    /// OUTSUM (v18 §4.2.2): a claim's outgoing sum equals the sum of its links' recorded entries —
+    /// maintained state that must never drift from the records it is built from.
+    function invariant_outSumConsistent() public view {
+        uint256[] memory cl = handler.getClaims();
+        for (uint256 i = 0; i < cl.length; i++) {
+            LinkGraph.Edge[] memory outs = graph.getOutgoing(cl[i]);
+            uint256 sum;
+            for (uint256 k = 0; k < outs.length; k++) {
+                sum += score.outContrib(outs[k].linkPostId);
+            }
+            assertEq(score.outSum(cl[i]), sum, "outSum drifted from the links' entries");
+        }
+    }
+
+    /// NO GHOST LEADER (review C-4): whenever sMax > 0, the post that defines it has live stake.
+    function invariant_noGhostLeader() public view {
+        if (stakeEng.sMax() == 0) {
+            return;
+        }
+        uint256 leader = stakeEng.sMaxPostId();
+        (uint256 A, uint256 D) = stakeEng.getPostTotals(leader);
+        assertGt(A + D, 0, "sMax is defined by a drained post");
+    }
+
     // ───────────────────────── registry & graph shape ─────────────────────────
 
     /// IDS (§1): ids are dense from 1; every successful create consumed exactly one id.
@@ -463,13 +515,9 @@ contract CoreInvariantsTest is Test {
     }
 
     /// EDGE VIEW == POOL: the per-edge view the app reads sums to the pool the chain settles on.
-    /// FINDING CI-2 (2026-09-28): fails on main — getEdgeContribution walks with an empty cycle
-    /// stack, so on any cycle through the target it credits a parent VS the pool cuts to 0.
-    /// Gated until the fix lands; run with CORE_INV_PENDING=1 to see it.
+    /// Finding CI-2 (2026-09-28) — closed by patch_settlement_snapshots: one eligibility/ranking
+    /// function serves settlement and getEdgeContribution.
     function invariant_edgeContributionsSumToPool() public view {
-        if (!vm.envOr("CORE_INV_PENDING", false)) {
-            return;
-        }
         uint256[] memory cl = handler.getClaims();
         for (uint256 i = 0; i < cl.length; i++) {
             (uint256 A, uint256 D) = stakeEng.getPostTotals(cl[i]);

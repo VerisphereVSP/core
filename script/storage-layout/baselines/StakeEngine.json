@@ -2,8 +2,8 @@
   "_meta": {
     "contract": "src/StakeEngine.sol:StakeEngine",
     "forge_version": "forge Version: 1.5.1-v1.5.1",
-    "generated_at": "2026-09-24T20:42:44Z",
-    "layout_sha256": "1969104eca3314693a3b448eb10927d661e361effbc9a9430346a71088233879",
+    "generated_at": "2026-10-02T08:58:47Z",
+    "layout_sha256": "aeba64c6cf1f09a6b9bde7513dc4c4a83eea270d1583d21e1604a8b28bdd5abe",
     "note": "Storage-layout regression baseline. Regenerate ONLY for an intended, reviewed, upgrade-safe layout change via check.sh --update.",
     "schema": 2
   },
@@ -154,10 +154,16 @@
         "type": "t_contract(IScoreEngineV2)"
       },
       {
-        "label": "__gap",
+        "label": "bucketEntryTime",
         "offset": 0,
         "slot": 140,
-        "type": "t_array(t_uint256)493_storage"
+        "type": "t_mapping(t_uint256,t_array(t_uint256)2_storage)"
+      },
+      {
+        "label": "__gap",
+        "offset": 0,
+        "slot": 141,
+        "type": "t_array(t_uint256)492_storage"
       }
     ],
     "types": {
@@ -195,10 +201,15 @@
         "encoding": "inplace",
         "numberOfBytes": "3200"
       },
-      "t_array(t_uint256)493_storage": {
+      "t_array(t_uint256)2_storage": {
         "base": "t_uint256",
         "encoding": "inplace",
-        "numberOfBytes": "15776"
+        "numberOfBytes": "64"
+      },
+      "t_array(t_uint256)492_storage": {
+        "base": "t_uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "15744"
       },
       "t_bool": {
         "encoding": "inplace",
@@ -231,6 +242,12 @@
         "key": "t_uint256",
         "numberOfBytes": "32",
         "value": "t_array(t_struct(Observation)_storage)dyn_storage"
+      },
+      "t_mapping(t_uint256,t_array(t_uint256)2_storage)": {
+        "encoding": "mapping",
+        "key": "t_uint256",
+        "numberOfBytes": "32",
+        "value": "t_array(t_uint256)2_storage"
       },
       "t_mapping(t_uint256,t_mapping(t_uint8,t_mapping(t_address,t_uint256)))": {
         "encoding": "mapping",

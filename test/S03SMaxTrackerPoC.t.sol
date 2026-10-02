@@ -105,14 +105,8 @@ contract S03SMaxTrackerPoC is Test {
         _stake(dave, 4, 0, 80e18);
         _regMany(_four(1, 2, 3, 4));
 
-        (uint256 p0, uint256 t0, uint256 p1, uint256 t1, uint256 p2, uint256 t2) = eng.getTopPosts();
-        emit log("--- topPosts after seeding (post 4 is NOT tracked) ---");
-        emit log_named_uint("slot0 postId", p0);
-        emit log_named_uint("slot0 total", t0);
-        emit log_named_uint("slot1 postId", p1);
-        emit log_named_uint("slot1 total", t1);
-        emit log_named_uint("slot2 postId", p2);
-        emit log_named_uint("slot2 total", t2);
+        emit log("--- tracker after seeding (post 4 is NOT tracked) ---");
+        emit log_named_uint("leader postId", eng.sMaxPostId());
         emit log_named_uint("sMax", eng.sMax());
         emit log_named_uint("post4 total (untracked)", _postTotal(4));
 
@@ -131,9 +125,7 @@ contract S03SMaxTrackerPoC is Test {
         emit log_named_uint("sMax", sMaxNow);
         emit log_named_uint("true leader total (post 4)", leaderNow);
 
-        (p0, t0,,,,) = eng.getTopPosts();
-        emit log_named_uint("slot0 postId now", p0);
-        emit log_named_uint("slot0 total now", t0);
+        emit log_named_uint("leader postId now", eng.sMaxPostId());
 
         // Invariant I.4: sMax >= leaderTotal. Report the violation size if any.
         if (sMaxNow < leaderNow) {

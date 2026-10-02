@@ -1,9 +1,9 @@
 {
   "by_impact": {
     "High": 0,
-    "Informational": 46,
-    "Low": 48,
-    "Medium": 34,
+    "Informational": 41,
+    "Low": 44,
+    "Medium": 48,
     "Optimization": 2
   },
   "findings": [
@@ -24,12 +24,12 @@
       "location": "src/ProtocolViews.sol:100"
     },
     {
-      "check": "reentrancy-no-eth",
+      "check": "timestamp",
       "confidence": "Medium",
-      "element": "setStake",
-      "fingerprint": "0bcb495258c8f03a",
-      "impact": "Medium",
-      "location": "src/StakeEngine.sol:685"
+      "element": "_writeSnapshot",
+      "fingerprint": "0b01691d263c6c3f",
+      "impact": "Low",
+      "location": "src/ScoreEngine.sol:191"
     },
     {
       "check": "reentrancy-no-eth",
@@ -37,7 +37,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:685"
+      "location": "src/StakeEngine.sol:684"
     },
     {
       "check": "reentrancy-no-eth",
@@ -45,7 +45,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:685"
+      "location": "src/StakeEngine.sol:684"
     },
     {
       "check": "reentrancy-no-eth",
@@ -53,7 +53,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:685"
+      "location": "src/StakeEngine.sol:684"
     },
     {
       "check": "reentrancy-no-eth",
@@ -61,7 +61,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:685"
+      "location": "src/StakeEngine.sol:684"
     },
     {
       "check": "reentrancy-no-eth",
@@ -69,7 +69,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:685"
+      "location": "src/StakeEngine.sol:684"
     },
     {
       "check": "reentrancy-no-eth",
@@ -77,7 +77,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:685"
+      "location": "src/StakeEngine.sol:684"
     },
     {
       "check": "reentrancy-no-eth",
@@ -85,31 +85,15 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:685"
+      "location": "src/StakeEngine.sol:684"
     },
     {
-      "check": "dead-code",
+      "check": "reentrancy-no-eth",
       "confidence": "Medium",
-      "element": "_applyEpoch",
-      "fingerprint": "104f725f62702afd",
-      "impact": "Informational",
-      "location": "src/StakeEngine.sol:888"
-    },
-    {
-      "check": "divide-before-multiply",
-      "confidence": "Medium",
-      "element": "_projectTotals",
-      "fingerprint": "1176ec9c82beef04",
+      "element": "setStake",
+      "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:983"
-    },
-    {
-      "check": "divide-before-multiply",
-      "confidence": "Medium",
-      "element": "_computeEdgeContribution",
-      "fingerprint": "1206027770ad6630",
-      "impact": "Medium",
-      "location": "src/ScoreEngine.sol:413"
+      "location": "src/StakeEngine.sol:684"
     },
     {
       "check": "incorrect-equality",
@@ -117,23 +101,7 @@
       "element": "_settleBucket",
       "fingerprint": "136d4d02ff0927b2",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1562"
-    },
-    {
-      "check": "incorrect-equality",
-      "confidence": "High",
-      "element": "_settleBucket",
-      "fingerprint": "136d4d02ff0927b2",
-      "impact": "Medium",
-      "location": "src/StakeEngine.sol:1562"
-    },
-    {
-      "check": "cyclomatic-complexity",
-      "confidence": "High",
-      "element": "_increaseUser",
-      "fingerprint": "15b9d49815e6de7f",
-      "impact": "Informational",
-      "location": "src/StakeEngine.sol:1424"
+      "location": "src/StakeEngine.sol:1440"
     },
     {
       "check": "incorrect-equality",
@@ -141,15 +109,15 @@
       "element": "_projectLotValue",
       "fingerprint": "160f822661d43b1c",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1057"
+      "location": "src/StakeEngine.sol:1059"
     },
     {
-      "check": "divide-before-multiply",
-      "confidence": "Medium",
-      "element": "_settleBucket",
-      "fingerprint": "16e0738556de802c",
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "_projectLotValue",
+      "fingerprint": "160f822661d43b1c",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1562"
+      "location": "src/StakeEngine.sol:1059"
     },
     {
       "check": "timestamp",
@@ -157,7 +125,15 @@
       "element": "_projectLotValue",
       "fingerprint": "232dac1e92878286",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1057"
+      "location": "src/StakeEngine.sol:1059"
+    },
+    {
+      "check": "timestamp",
+      "confidence": "Medium",
+      "element": "_projectTotals",
+      "fingerprint": "23fac9a2dc39448e",
+      "impact": "Low",
+      "location": "src/StakeEngine.sol:1001"
     },
     {
       "check": "timestamp",
@@ -165,7 +141,7 @@
       "element": "_maybeSnapshot",
       "fingerprint": "295a69aafc4220d2",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:764"
+      "location": "src/StakeEngine.sol:763"
     },
     {
       "check": "incorrect-equality",
@@ -173,39 +149,7 @@
       "element": "_projectBucket",
       "fingerprint": "29f8e8529df820c6",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1521"
-    },
-    {
-      "check": "incorrect-equality",
-      "confidence": "High",
-      "element": "_projectBucket",
-      "fingerprint": "29f8e8529df820c6",
-      "impact": "Medium",
-      "location": "src/StakeEngine.sol:1521"
-    },
-    {
-      "check": "calls-loop",
-      "confidence": "Medium",
-      "element": "_sumOutgoingLinkStake",
-      "fingerprint": "2abbe92ae2e04029",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:572"
-    },
-    {
-      "check": "calls-loop",
-      "confidence": "Medium",
-      "element": "_sumOutgoingLinkStake",
-      "fingerprint": "2abbe92ae2e04029",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:572"
-    },
-    {
-      "check": "calls-loop",
-      "confidence": "Medium",
-      "element": "_sumOutgoingLinkStake",
-      "fingerprint": "2abbe92ae2e04029",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:572"
+      "location": "src/StakeEngine.sol:1415"
     },
     {
       "check": "naming-convention",
@@ -221,7 +165,7 @@
       "element": "stake",
       "fingerprint": "2bc8456d5b7492a2",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:596"
+      "location": "src/StakeEngine.sol:595"
     },
     {
       "check": "reentrancy-no-eth",
@@ -229,7 +173,7 @@
       "element": "stake",
       "fingerprint": "2bc8456d5b7492a2",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:596"
+      "location": "src/StakeEngine.sol:595"
     },
     {
       "check": "incorrect-equality",
@@ -237,7 +181,7 @@
       "element": "_applyEpochFor",
       "fingerprint": "2deecfc5af08e2e0",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:898"
+      "location": "src/StakeEngine.sol:890"
     },
     {
       "check": "naming-convention",
@@ -253,7 +197,7 @@
       "element": "_msgData",
       "fingerprint": "35aff08eb8b0c63d",
       "impact": "Informational",
-      "location": "src/governance/GovernedUpgradeable.sol:89"
+      "location": "src/governance/GovernedUpgradeable.sol:94"
     },
     {
       "check": "timestamp",
@@ -269,7 +213,7 @@
       "element": "_applySMaxDecay",
       "fingerprint": "38b7a222c16b58ec",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1210"
+      "location": "src/StakeEngine.sol:1141"
     },
     {
       "check": "costly-loop",
@@ -277,7 +221,7 @@
       "element": "_applySMaxDecay",
       "fingerprint": "38b7a222c16b58ec",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1210"
+      "location": "src/StakeEngine.sol:1141"
     },
     {
       "check": "costly-loop",
@@ -285,7 +229,7 @@
       "element": "_applySMaxDecay",
       "fingerprint": "38b7a222c16b58ec",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1210"
+      "location": "src/StakeEngine.sol:1141"
     },
     {
       "check": "unused-return",
@@ -293,7 +237,15 @@
       "element": "getTimeWeightedTotals",
       "fingerprint": "3b9eba9fd78d5b69",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:483"
+      "location": "src/StakeEngine.sol:482"
+    },
+    {
+      "check": "timestamp",
+      "confidence": "Medium",
+      "element": "_activeAt",
+      "fingerprint": "3fcfdb3b604db6ab",
+      "impact": "Low",
+      "location": "src/ScoreEngine.sol:574"
     },
     {
       "check": "missing-zero-check",
@@ -309,7 +261,7 @@
       "element": "withdraw",
       "fingerprint": "47ec8394947a0821",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:638"
+      "location": "src/StakeEngine.sol:637"
     },
     {
       "check": "naming-convention",
@@ -320,12 +272,28 @@
       "location": "src/governance/GovernedUpgradeable.sol:34"
     },
     {
+      "check": "timestamp",
+      "confidence": "Medium",
+      "element": "getEdgeContribution",
+      "fingerprint": "49228752d6f85ec1",
+      "impact": "Low",
+      "location": "src/ScoreEngine.sol:306"
+    },
+    {
       "check": "reentrancy-no-eth",
       "confidence": "Medium",
       "element": "_forceSnapshot",
       "fingerprint": "4c1f738ab81c6ecc",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:780"
+      "location": "src/StakeEngine.sol:789"
+    },
+    {
+      "check": "reentrancy-no-eth",
+      "confidence": "Medium",
+      "element": "_forceSnapshot",
+      "fingerprint": "4c1f738ab81c6ecc",
+      "impact": "Medium",
+      "location": "src/StakeEngine.sol:789"
     },
     {
       "check": "reentrancy-benign",
@@ -333,7 +301,7 @@
       "element": "withdraw",
       "fingerprint": "54b347d868f44e5d",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:638"
+      "location": "src/StakeEngine.sol:637"
     },
     {
       "check": "reentrancy-benign",
@@ -341,7 +309,7 @@
       "element": "_forceSnapshot",
       "fingerprint": "558c6d1b47de3929",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:780"
+      "location": "src/StakeEngine.sol:789"
     },
     {
       "check": "timestamp",
@@ -349,7 +317,7 @@
       "element": "_applySMaxDecay",
       "fingerprint": "55a3a4425ec9ad04",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1210"
+      "location": "src/StakeEngine.sol:1141"
     },
     {
       "check": "unused-state",
@@ -360,12 +328,20 @@
       "location": "src/VSPToken.sol:193"
     },
     {
+      "check": "uninitialized-local",
+      "confidence": "Medium",
+      "element": "count",
+      "fingerprint": "572cafb82b399b10",
+      "impact": "Medium",
+      "location": "src/ScoreEngine.sol:518"
+    },
+    {
       "check": "timestamp",
       "confidence": "Medium",
       "element": "getPostTotals",
       "fingerprint": "5781a6a7a7e41f03",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:514"
+      "location": "src/StakeEngine.sol:513"
     },
     {
       "check": "constable-states",
@@ -376,38 +352,6 @@
       "location": "src/LinkGraph.sol:41"
     },
     {
-      "check": "calls-loop",
-      "confidence": "Medium",
-      "element": "_effectiveVSRay",
-      "fingerprint": "5a476ab9bf91a759",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:262"
-    },
-    {
-      "check": "calls-loop",
-      "confidence": "Medium",
-      "element": "_effectiveVSRay",
-      "fingerprint": "5a476ab9bf91a759",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:262"
-    },
-    {
-      "check": "calls-loop",
-      "confidence": "Medium",
-      "element": "_effectiveVSRay",
-      "fingerprint": "5a476ab9bf91a759",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:262"
-    },
-    {
-      "check": "calls-loop",
-      "confidence": "Medium",
-      "element": "_effectiveVSRay",
-      "fingerprint": "5a476ab9bf91a759",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:262"
-    },
-    {
       "check": "reentrancy-benign",
       "confidence": "Medium",
       "element": "createClaim",
@@ -416,20 +360,12 @@
       "location": "src/PostRegistry.sol:184"
     },
     {
-      "check": "dead-code",
-      "confidence": "Medium",
-      "element": "_projectSMaxDecay",
-      "fingerprint": "5eb3dec4560ad7be",
-      "impact": "Informational",
-      "location": "src/StakeEngine.sol:1264"
-    },
-    {
       "check": "naming-convention",
       "confidence": "High",
       "element": "__gap",
       "fingerprint": "6099617d8a9f7597",
       "impact": "Informational",
-      "location": "src/LinkGraph.sol:135"
+      "location": "src/LinkGraph.sol:169"
     },
     {
       "check": "unused-state",
@@ -445,7 +381,7 @@
       "element": "__reservedSlot1_unused",
       "fingerprint": "63a260b2a0e464d5",
       "impact": "Informational",
-      "location": "src/ScoreEngine.sol:41"
+      "location": "src/ScoreEngine.sol:35"
     },
     {
       "check": "reentrancy-benign",
@@ -453,7 +389,7 @@
       "element": "setStake",
       "fingerprint": "63ab651bac26de93",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:685"
+      "location": "src/StakeEngine.sol:684"
     },
     {
       "check": "reentrancy-benign",
@@ -461,7 +397,7 @@
       "element": "setStake",
       "fingerprint": "63ab651bac26de93",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:685"
+      "location": "src/StakeEngine.sol:684"
     },
     {
       "check": "reentrancy-benign",
@@ -469,15 +405,31 @@
       "element": "setStake",
       "fingerprint": "63ab651bac26de93",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:685"
+      "location": "src/StakeEngine.sol:684"
     },
     {
-      "check": "timestamp",
-      "confidence": "Medium",
-      "element": "_projectSMaxDecay",
-      "fingerprint": "66754b062ff1f03d",
-      "impact": "Low",
-      "location": "src/StakeEngine.sol:1264"
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "_parentVsExcludingSelf",
+      "fingerprint": "65403c5662ba32cf",
+      "impact": "Medium",
+      "location": "src/ScoreEngine.sol:391"
+    },
+    {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "_parentVsExcludingSelf",
+      "fingerprint": "65403c5662ba32cf",
+      "impact": "Medium",
+      "location": "src/ScoreEngine.sol:391"
+    },
+    {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "_parentVsExcludingSelf",
+      "fingerprint": "65403c5662ba32cf",
+      "impact": "Medium",
+      "location": "src/ScoreEngine.sol:391"
     },
     {
       "check": "constable-states",
@@ -485,7 +437,7 @@
       "element": "__reservedSlot1_unused",
       "fingerprint": "669cb2b14b34ff72",
       "impact": "Optimization",
-      "location": "src/ScoreEngine.sol:41"
+      "location": "src/ScoreEngine.sol:35"
     },
     {
       "check": "timestamp",
@@ -493,7 +445,7 @@
       "element": "_projectBucket",
       "fingerprint": "691309b6162d9328",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1521"
+      "location": "src/StakeEngine.sol:1415"
     },
     {
       "check": "timestamp",
@@ -501,7 +453,15 @@
       "element": "_applyEpochFor",
       "fingerprint": "69cb6a76096d426e",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:898"
+      "location": "src/StakeEngine.sol:890"
+    },
+    {
+      "check": "timestamp",
+      "confidence": "Medium",
+      "element": "getSnapshot",
+      "fingerprint": "6f2c09ac4587e026",
+      "impact": "Low",
+      "location": "src/ScoreEngine.sol:237"
     },
     {
       "check": "naming-convention",
@@ -517,7 +477,7 @@
       "element": "__gap",
       "fingerprint": "7d2b7acea2f7071e",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1786"
+      "location": "src/StakeEngine.sol:1649"
     },
     {
       "check": "missing-zero-check",
@@ -533,7 +493,15 @@
       "element": "_projectSideTotal",
       "fingerprint": "81bb502f4ce4f0a8",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1024"
+      "location": "src/StakeEngine.sol:1015"
+    },
+    {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "_projectSideTotal",
+      "fingerprint": "81bb502f4ce4f0a8",
+      "impact": "Medium",
+      "location": "src/StakeEngine.sol:1015"
     },
     {
       "check": "naming-convention",
@@ -541,15 +509,7 @@
       "element": "__gap",
       "fingerprint": "842162b5e84eabbe",
       "impact": "Informational",
-      "location": "src/ScoreEngine.sol:636"
-    },
-    {
-      "check": "unused-return",
-      "confidence": "Medium",
-      "element": "_totals",
-      "fingerprint": "84866b87b6188de4",
-      "impact": "Medium",
-      "location": "src/ScoreEngine.sol:101"
+      "location": "src/ScoreEngine.sol:607"
     },
     {
       "check": "naming-convention",
@@ -560,6 +520,14 @@
       "location": "src/VSPToken.sol:48"
     },
     {
+      "check": "timestamp",
+      "confidence": "Medium",
+      "element": "_poolView",
+      "fingerprint": "8882a8d31df946f4",
+      "impact": "Low",
+      "location": "src/ScoreEngine.sol:288"
+    },
+    {
       "check": "reentrancy-benign",
       "confidence": "Medium",
       "element": "createLink",
@@ -568,12 +536,12 @@
       "location": "src/PostRegistry.sol:241"
     },
     {
-      "check": "dead-code",
+      "check": "timestamp",
       "confidence": "Medium",
-      "element": "_addOrMergeLot",
-      "fingerprint": "8d43dcb8be3d68a6",
-      "impact": "Informational",
-      "location": "src/StakeEngine.sol:960"
+      "element": "_freshness",
+      "fingerprint": "8d1dc3d90c754d28",
+      "impact": "Low",
+      "location": "src/ScoreEngine.sol:555"
     },
     {
       "check": "costly-loop",
@@ -581,7 +549,7 @@
       "element": "_updateSMax",
       "fingerprint": "8eef076714f26a9c",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1134"
+      "location": "src/StakeEngine.sol:1080"
     },
     {
       "check": "costly-loop",
@@ -589,7 +557,7 @@
       "element": "_updateSMax",
       "fingerprint": "8eef076714f26a9c",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1134"
+      "location": "src/StakeEngine.sol:1080"
     },
     {
       "check": "costly-loop",
@@ -597,7 +565,7 @@
       "element": "_updateSMax",
       "fingerprint": "8eef076714f26a9c",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1134"
+      "location": "src/StakeEngine.sol:1080"
     },
     {
       "check": "costly-loop",
@@ -605,7 +573,7 @@
       "element": "_updateSMax",
       "fingerprint": "8eef076714f26a9c",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1134"
+      "location": "src/StakeEngine.sol:1080"
     },
     {
       "check": "costly-loop",
@@ -613,7 +581,7 @@
       "element": "_updateSMax",
       "fingerprint": "8eef076714f26a9c",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1134"
+      "location": "src/StakeEngine.sol:1080"
     },
     {
       "check": "naming-convention",
@@ -632,12 +600,12 @@
       "location": "src/PostRegistry.sol:241"
     },
     {
-      "check": "divide-before-multiply",
-      "confidence": "Medium",
-      "element": "_projectBucket",
-      "fingerprint": "95b45653cb79b433",
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "_projectTotals",
+      "fingerprint": "981cd83ffc751b34",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1521"
+      "location": "src/StakeEngine.sol:1001"
     },
     {
       "check": "unused-state",
@@ -645,7 +613,7 @@
       "element": "__gap",
       "fingerprint": "989231729e0f9bd4",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1786"
+      "location": "src/StakeEngine.sol:1649"
     },
     {
       "check": "missing-zero-check",
@@ -653,7 +621,31 @@
       "element": "newGovernance",
       "fingerprint": "9964bfd3c6da26f1",
       "impact": "Low",
-      "location": "src/governance/GovernedUpgradeable.sol:62"
+      "location": "src/governance/GovernedUpgradeable.sol:67"
+    },
+    {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "getEdgeContribution",
+      "fingerprint": "9bf91bdba7e3df36",
+      "impact": "Medium",
+      "location": "src/ScoreEngine.sol:306"
+    },
+    {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "getEdgeContribution",
+      "fingerprint": "9bf91bdba7e3df36",
+      "impact": "Medium",
+      "location": "src/ScoreEngine.sol:306"
+    },
+    {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "getEdgeContribution",
+      "fingerprint": "9bf91bdba7e3df36",
+      "impact": "Medium",
+      "location": "src/ScoreEngine.sol:306"
     },
     {
       "check": "reentrancy-events",
@@ -661,7 +653,7 @@
       "element": "_forceSnapshot",
       "fingerprint": "a3cc09fc353a83ba",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:780"
+      "location": "src/StakeEngine.sol:789"
     },
     {
       "check": "reentrancy-events",
@@ -669,7 +661,7 @@
       "element": "_forceSnapshot",
       "fingerprint": "a3cc09fc353a83ba",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:780"
+      "location": "src/StakeEngine.sol:789"
     },
     {
       "check": "naming-convention",
@@ -677,7 +669,15 @@
       "element": "ERC20_TOKEN",
       "fingerprint": "a4cbf01868eacfce",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:84"
+      "location": "src/StakeEngine.sol:83"
+    },
+    {
+      "check": "timestamp",
+      "confidence": "Medium",
+      "element": "_projectLot",
+      "fingerprint": "a59da646ea0d1efb",
+      "impact": "Low",
+      "location": "src/StakeEngine.sol:1039"
     },
     {
       "check": "timestamp",
@@ -685,7 +685,39 @@
       "element": "_forceSnapshot",
       "fingerprint": "a8b99e3f7d4cd22a",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:780"
+      "location": "src/StakeEngine.sol:789"
+    },
+    {
+      "check": "timestamp",
+      "confidence": "Medium",
+      "element": "_parentVsExcludingSelf",
+      "fingerprint": "a8e90fc7219d3b64",
+      "impact": "Low",
+      "location": "src/ScoreEngine.sol:391"
+    },
+    {
+      "check": "timestamp",
+      "confidence": "Medium",
+      "element": "seedSnapshot",
+      "fingerprint": "aa412968dd943c1f",
+      "impact": "Low",
+      "location": "src/ScoreEngine.sol:169"
+    },
+    {
+      "check": "timestamp",
+      "confidence": "Medium",
+      "element": "_projectRate",
+      "fingerprint": "aaa4d45d91be8cc1",
+      "impact": "Low",
+      "location": "src/StakeEngine.sol:961"
+    },
+    {
+      "check": "timestamp",
+      "confidence": "Medium",
+      "element": "_incomingView",
+      "fingerprint": "ab211f598e6a5dde",
+      "impact": "Low",
+      "location": "src/ScoreEngine.sol:477"
     },
     {
       "check": "unused-state",
@@ -701,7 +733,7 @@
       "element": "refreshSMax",
       "fingerprint": "b07d4159aff96b88",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1202"
+      "location": "src/StakeEngine.sol:1111"
     },
     {
       "check": "naming-convention",
@@ -712,12 +744,28 @@
       "location": "src/PostRegistry.sol:411"
     },
     {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "_incoming",
+      "fingerprint": "b41a67befc927580",
+      "impact": "Medium",
+      "location": "src/ScoreEngine.sol:435"
+    },
+    {
       "check": "timestamp",
       "confidence": "Medium",
       "element": "getUserLotInfo",
       "fingerprint": "b6ca2733f200d8fe",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:554"
+      "location": "src/StakeEngine.sol:553"
+    },
+    {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "_applySMaxDecay",
+      "fingerprint": "b7948fbf4cf77067",
+      "impact": "Medium",
+      "location": "src/StakeEngine.sol:1141"
     },
     {
       "check": "timestamp",
@@ -725,7 +773,7 @@
       "element": "getUserStake",
       "fingerprint": "b83ace379b416a73",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:526"
+      "location": "src/StakeEngine.sol:525"
     },
     {
       "check": "naming-convention",
@@ -736,60 +784,36 @@
       "location": "src/interfaces/IStakeEngine.sol:6"
     },
     {
-      "check": "calls-loop",
+      "check": "timestamp",
       "confidence": "Medium",
-      "element": "_baseVSRay",
-      "fingerprint": "bbbc8600687071f2",
+      "element": "_updateSMax",
+      "fingerprint": "b92aea1b3eef9997",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:210"
+      "location": "src/StakeEngine.sol:1080"
     },
     {
-      "check": "calls-loop",
-      "confidence": "Medium",
-      "element": "_baseVSRay",
-      "fingerprint": "bbbc8600687071f2",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:210"
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "_edge",
+      "fingerprint": "bd4e934fc9f67873",
+      "impact": "Medium",
+      "location": "src/ScoreEngine.sol:353"
     },
     {
-      "check": "calls-loop",
-      "confidence": "Medium",
-      "element": "_baseVSRay",
-      "fingerprint": "bbbc8600687071f2",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:210"
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "_edge",
+      "fingerprint": "bd4e934fc9f67873",
+      "impact": "Medium",
+      "location": "src/ScoreEngine.sol:353"
     },
     {
-      "check": "calls-loop",
+      "check": "timestamp",
       "confidence": "Medium",
-      "element": "_sumIncomingContributions",
-      "fingerprint": "be72e39e630fc832",
+      "element": "_fitsI96",
+      "fingerprint": "bed776b1dbf071c5",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:341"
-    },
-    {
-      "check": "calls-loop",
-      "confidence": "Medium",
-      "element": "_sumIncomingContributions",
-      "fingerprint": "be72e39e630fc832",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:341"
-    },
-    {
-      "check": "calls-loop",
-      "confidence": "Medium",
-      "element": "_sumIncomingContributions",
-      "fingerprint": "be72e39e630fc832",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:341"
-    },
-    {
-      "check": "calls-loop",
-      "confidence": "Medium",
-      "element": "_sumIncomingContributions",
-      "fingerprint": "be72e39e630fc832",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:341"
+      "location": "src/ScoreEngine.sol:581"
     },
     {
       "check": "naming-convention",
@@ -805,7 +829,15 @@
       "element": "_forceSnapshot",
       "fingerprint": "c006928ac5e07039",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:780"
+      "location": "src/StakeEngine.sol:789"
+    },
+    {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "_forceSnapshot",
+      "fingerprint": "c006928ac5e07039",
+      "impact": "Medium",
+      "location": "src/StakeEngine.sol:789"
     },
     {
       "check": "missing-inheritance",
@@ -813,7 +845,15 @@
       "element": "ScoreEngine",
       "fingerprint": "c08e49989dbc4222",
       "impact": "Informational",
-      "location": "src/ScoreEngine.sol:32"
+      "location": "src/ScoreEngine.sol:29"
+    },
+    {
+      "check": "uninitialized-local",
+      "confidence": "Medium",
+      "element": "sum",
+      "fingerprint": "c0f8373a1a6fef10",
+      "impact": "Medium",
+      "location": "src/ScoreEngine.sol:182"
     },
     {
       "check": "unused-state",
@@ -832,6 +872,14 @@
       "location": "src/PostRegistry.sol:184"
     },
     {
+      "check": "uninitialized-local",
+      "confidence": "Medium",
+      "element": "adj",
+      "fingerprint": "c4c51ec5505914fc",
+      "impact": "Medium",
+      "location": "src/ScoreEngine.sol:398"
+    },
+    {
       "check": "naming-convention",
       "confidence": "High",
       "element": "__gap",
@@ -840,20 +888,12 @@
       "location": "src/ProtocolViews.sol:100"
     },
     {
-      "check": "unused-return",
-      "confidence": "Medium",
-      "element": "_forceSnapshot",
-      "fingerprint": "d197e07790b06a63",
-      "impact": "Medium",
-      "location": "src/StakeEngine.sol:780"
-    },
-    {
       "check": "naming-convention",
       "confidence": "High",
       "element": "__gap",
       "fingerprint": "d2ccfcfaa958e05f",
       "impact": "Informational",
-      "location": "src/governance/GovernedUpgradeable.sol:97"
+      "location": "src/governance/GovernedUpgradeable.sol:102"
     },
     {
       "check": "naming-convention",
@@ -869,7 +909,15 @@
       "element": "_projectSideTotal",
       "fingerprint": "d3d7859eec6e6003",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1024"
+      "location": "src/StakeEngine.sol:1015"
+    },
+    {
+      "check": "timestamp",
+      "confidence": "Medium",
+      "element": "_edge",
+      "fingerprint": "d58b255bbadaf26b",
+      "impact": "Low",
+      "location": "src/ScoreEngine.sol:353"
     },
     {
       "check": "unused-state",
@@ -877,7 +925,7 @@
       "element": "__reservedSlot1_unused",
       "fingerprint": "d9bd58a9089fff16",
       "impact": "Informational",
-      "location": "src/ScoreEngine.sol:41"
+      "location": "src/ScoreEngine.sol:35"
     },
     {
       "check": "naming-convention",
@@ -893,7 +941,7 @@
       "element": "setStake",
       "fingerprint": "dc1768351561c2fc",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:685"
+      "location": "src/StakeEngine.sol:684"
     },
     {
       "check": "unused-state",
@@ -901,7 +949,7 @@
       "element": "__gap",
       "fingerprint": "dceb4e4c7ef6d52e",
       "impact": "Informational",
-      "location": "src/LinkGraph.sol:135"
+      "location": "src/LinkGraph.sol:169"
     },
     {
       "check": "reentrancy-no-eth",
@@ -909,7 +957,7 @@
       "element": "refreshSMax",
       "fingerprint": "de33671b0b3b0d76",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1202"
+      "location": "src/StakeEngine.sol:1111"
     },
     {
       "check": "divide-before-multiply",
@@ -917,7 +965,55 @@
       "element": "_bucketRemove",
       "fingerprint": "e099e66a54a4b768",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1360"
+      "location": "src/StakeEngine.sol:1268"
+    },
+    {
+      "check": "timestamp",
+      "confidence": "Medium",
+      "element": "_topK",
+      "fingerprint": "e0d098289bdd4bf4",
+      "impact": "Low",
+      "location": "src/ScoreEngine.sol:510"
+    },
+    {
+      "check": "timestamp",
+      "confidence": "Medium",
+      "element": "_incoming",
+      "fingerprint": "e16651d64ce81bdf",
+      "impact": "Low",
+      "location": "src/ScoreEngine.sol:435"
+    },
+    {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "_topK",
+      "fingerprint": "e1ae6c8ba83d1a84",
+      "impact": "Medium",
+      "location": "src/ScoreEngine.sol:510"
+    },
+    {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "_topK",
+      "fingerprint": "e1ae6c8ba83d1a84",
+      "impact": "Medium",
+      "location": "src/ScoreEngine.sol:510"
+    },
+    {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "_topK",
+      "fingerprint": "e1ae6c8ba83d1a84",
+      "impact": "Medium",
+      "location": "src/ScoreEngine.sol:510"
+    },
+    {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "getSnapshot",
+      "fingerprint": "e488078296376dc0",
+      "impact": "Medium",
+      "location": "src/ScoreEngine.sol:237"
     },
     {
       "check": "naming-convention",
@@ -925,15 +1021,7 @@
       "element": "VSP_TOKEN",
       "fingerprint": "e4a2c54c93cad2ce",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:85"
-    },
-    {
-      "check": "cyclomatic-complexity",
-      "confidence": "High",
-      "element": "_updateSMax",
-      "fingerprint": "e8f294563e30e6d4",
-      "impact": "Informational",
-      "location": "src/StakeEngine.sol:1134"
+      "location": "src/StakeEngine.sol:84"
     },
     {
       "check": "reentrancy-benign",
@@ -941,23 +1029,7 @@
       "element": "stake",
       "fingerprint": "e9daed0a65e92ae4",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:596"
-    },
-    {
-      "check": "divide-before-multiply",
-      "confidence": "Medium",
-      "element": "_projectLotValue",
-      "fingerprint": "ea7d30779fe16e19",
-      "impact": "Medium",
-      "location": "src/StakeEngine.sol:1057"
-    },
-    {
-      "check": "divide-before-multiply",
-      "confidence": "Medium",
-      "element": "_projectLotValue",
-      "fingerprint": "ea7d30779fe16e19",
-      "impact": "Medium",
-      "location": "src/StakeEngine.sol:1057"
+      "location": "src/StakeEngine.sol:595"
     },
     {
       "check": "unused-state",
@@ -965,63 +1037,23 @@
       "element": "__gap",
       "fingerprint": "f0771cd3f859467b",
       "impact": "Informational",
-      "location": "src/ScoreEngine.sol:636"
+      "location": "src/ScoreEngine.sol:607"
     },
     {
-      "check": "calls-loop",
+      "check": "uninitialized-local",
       "confidence": "Medium",
-      "element": "_computeEdgeContribution",
-      "fingerprint": "f368c5e72b16dab0",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:413"
-    },
-    {
-      "check": "calls-loop",
-      "confidence": "Medium",
-      "element": "_computeEdgeContribution",
-      "fingerprint": "f368c5e72b16dab0",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:413"
-    },
-    {
-      "check": "calls-loop",
-      "confidence": "Medium",
-      "element": "_computeEdgeContribution",
-      "fingerprint": "f368c5e72b16dab0",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:413"
-    },
-    {
-      "check": "calls-loop",
-      "confidence": "Medium",
-      "element": "_computeEdgeContribution",
-      "fingerprint": "f368c5e72b16dab0",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:413"
-    },
-    {
-      "check": "calls-loop",
-      "confidence": "Medium",
-      "element": "_computeEdgeContribution",
-      "fingerprint": "f368c5e72b16dab0",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:413"
-    },
-    {
-      "check": "calls-loop",
-      "confidence": "Medium",
-      "element": "_computeEdgeContribution",
-      "fingerprint": "f368c5e72b16dab0",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:413"
-    },
-    {
-      "check": "divide-before-multiply",
-      "confidence": "Medium",
-      "element": "_projectSideTotal",
-      "fingerprint": "fa189611f576492b",
+      "element": "ahead",
+      "fingerprint": "f4345e6e16362e4b",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1024"
+      "location": "src/ScoreEngine.sol:327"
+    },
+    {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "_projectRate",
+      "fingerprint": "f6e178a5c17e8dad",
+      "impact": "Medium",
+      "location": "src/StakeEngine.sol:961"
     },
     {
       "check": "timestamp",
@@ -1029,7 +1061,7 @@
       "element": "_settleBucket",
       "fingerprint": "fabc5d90b8bd34ae",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1562"
+      "location": "src/StakeEngine.sol:1440"
     },
     {
       "check": "missing-zero-check",
@@ -1040,6 +1072,14 @@
       "location": "src/PostRegistry.sol:135"
     },
     {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "_writeSnapshot",
+      "fingerprint": "fd719595c43a2053",
+      "impact": "Medium",
+      "location": "src/ScoreEngine.sol:191"
+    },
+    {
       "check": "naming-convention",
       "confidence": "High",
       "element": "__gap",
@@ -1048,7 +1088,7 @@
       "location": "src/VSPToken.sol:193"
     }
   ],
-  "generated_utc": "2026-09-26T19:03:17.433201+00:00",
+  "generated_utc": "2026-10-02T09:03:48.651378+00:00",
   "scope": "src (excludes lib,test,script)",
-  "total": 130
+  "total": 135
 }

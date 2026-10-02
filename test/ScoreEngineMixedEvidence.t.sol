@@ -104,6 +104,10 @@ contract ScoreEngineMixedEvidenceTest is Test {
         if (linkStake > 0) {
             stakeEng.stake(linkId, 0, linkStake);
         }
+        // v18 (patch_settlement_snapshots): a contribution is read from the parent's and the link's
+        // SNAPSHOTS; seeding writes them from the standing state (what the keeper's seed pass does).
+        score.seedSnapshot(from);
+        score.seedSnapshot(linkId);
     }
 
     /// Mainnet claim #1 fixture (scaled x100): 200 direct support; two credible
