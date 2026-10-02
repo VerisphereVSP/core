@@ -1,9 +1,9 @@
 {
   "_meta": {
     "contract": "src/LinkGraph.sol:LinkGraph",
-    "forge_version": "forge Version: 1.5.1-stable",
-    "generated_at": "2026-08-30T16:23:27Z",
-    "layout_sha256": "fb03396e84e6a488de35bd3ac65191f1c71af10a6366d27f24a1f5cbcfe50c93",
+    "forge_version": "forge Version: 1.5.1-v1.5.1",
+    "generated_at": "2026-10-02T08:58:47Z",
+    "layout_sha256": "72722bc2024b06d3c3e183774cf5ad6ee56af2976d812134482a24f357a04e90",
     "note": "Storage-layout regression baseline. Regenerate ONLY for an intended, reviewed, upgrade-safe layout change via check.sh --update.",
     "schema": 2
   },
@@ -64,10 +64,22 @@
         "type": "t_mapping(t_bytes32,t_bool)"
       },
       {
-        "label": "__gap",
+        "label": "_maxOutgoing",
         "offset": 0,
         "slot": 108,
-        "type": "t_array(t_uint256)500_storage"
+        "type": "t_uint256"
+      },
+      {
+        "label": "_maxIncoming",
+        "offset": 0,
+        "slot": 109,
+        "type": "t_uint256"
+      },
+      {
+        "label": "__gap",
+        "offset": 0,
+        "slot": 110,
+        "type": "t_array(t_uint256)498_storage"
       }
     ],
     "types": {
@@ -90,10 +102,10 @@
         "encoding": "inplace",
         "numberOfBytes": "3200"
       },
-      "t_array(t_uint256)500_storage": {
+      "t_array(t_uint256)498_storage": {
         "base": "t_uint256",
         "encoding": "inplace",
-        "numberOfBytes": "16000"
+        "numberOfBytes": "15936"
       },
       "t_bool": {
         "encoding": "inplace",

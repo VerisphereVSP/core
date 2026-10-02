@@ -157,10 +157,12 @@ contract GameBInvariantsTest is Test {
             uint256 mass;
             LinkGraph.IncomingEdge[] memory inc = graph.getIncoming(c);
             for (uint256 k = 0; k < inc.length; k++) {
-                (uint256 pa, uint256 pd) = stakeEng.getPostTotals(inc[k].fromClaimPostId);
-                mass += pa + pd; // parentVS <= 1, so mass <= parentT
+                // v18: contributions are computed from the parent's SNAPSHOT total (window-averaged at
+                // its last settlement), which is the bound — the live total may have moved since.
+                (,, uint96 pT,) = score.getSnapshot(inc[k].fromClaimPostId);
+                mass += pT; // parentVS <= 1, so contribution <= snapshot T
             }
-            assertLe((S - A) + (C - D), mass + 1, "contributions exceed parents' total stake");
+            assertLe((S - A) + (C - D), mass + 1, "contributions exceed parents' snapshot stake");
         }
     }
 

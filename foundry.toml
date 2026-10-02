@@ -9,6 +9,13 @@ cache = true
 optimizer = true
 optimizer_runs = 200 
 via_ir = true
+# patch_settlement_snapshots: pin the compiler. StakeEngine sits 116 B under EIP-170 with 0.8.33; an
+# auto-selected newer solc could size it differently and fail `forge build --sizes` in CI.
+solc = "0.8.33"
+# patch_settlement_snapshots: the F-D acceptance test builds a 1,000-link flood inside one test tx
+# (~1.5e9 gas of setup); the default 2^30 cap is too small for it. This is the TEST runner's cap, not
+# a chain parameter.
+gas_limit = 4000000000
 
 fs_permissions = [
   { access = "read-write", path = "./deployments" },

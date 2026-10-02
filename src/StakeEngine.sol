@@ -8,10 +8,9 @@ import "./lib/TimeWeighted.sol";
 
 /// @dev patch_game_b: the only ScoreEngine surface settlement needs.
 interface IScoreEngineV2 {
-    function effectivePoolWindow(uint256 postId, uint256 t0, uint256 t1)
-        external
-        view
-        returns (uint256 S, uint256 C, bool exact);
+    /// patch_settlement_snapshots: settlement reads stored snapshots and writes this post's.
+    function settlePool(uint256 postId, uint256 t0, uint256 t1, bool strict) external returns (uint256 S, uint256 C);
+    function previewPoolWindow(uint256 postId, uint256 t0, uint256 t1) external view returns (uint256 S, uint256 C);
 }
 import "./interfaces/IProtocolPolicy.sol";
 import "./governance/GovernedUpgradeable.sol";
@@ -95,23 +94,24 @@ contract StakeEngine is GovernedUpgradeable {
     ///         irreducible residue is closed by permissionless refreshSMax().
     uint256 public constant TRACKED_POSTS = 10;
 
-    struct TopPost {
-        uint256 postId;
-        uint256 total;
-    }
-    TopPost[TRACKED_POSTS] private topPosts;
+    /// @dev Tracker slots; the struct and its maintenance live in TimeWeighted (same layout: two words).
+    TimeWeighted.TopPost[TRACKED_POSTS] private topPosts;
 
     uint256 private constant _NOT_ENTERED = 1;
     uint256 private constant _ENTERED = 2;
     uint256 private _reentrancyStatus;
 
     modifier nonReentrant() {
+        _enter();
+        _;
+        _reentrancyStatus = _NOT_ENTERED;
+    }
+
+    function _enter() internal {
         if (_reentrancyStatus == _ENTERED) {
             revert Reentrant();
         }
         _reentrancyStatus = _ENTERED;
-        _;
-        _reentrancyStatus = _NOT_ENTERED;
     }
     uint256 public sMaxLastUpdatedEpoch;
 
@@ -312,10 +312,14 @@ contract StakeEngine is GovernedUpgradeable {
     error AlreadyInitializedV2();
 
     modifier whenNotPaused() {
+        _requireNotPaused();
+        _;
+    }
+
+    function _requireNotPaused() internal view {
         if (paused) {
             revert WhenPaused();
         }
-        _;
     }
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -371,8 +375,19 @@ contract StakeEngine is GovernedUpgradeable {
     event ProtocolPolicySet(address indexed oldPolicy, address indexed newPolicy);
 
     /// @notice patch_game_b: wire the ScoreEngine whose effective pool settlement pays on.
+    event ScoreEngineSet(address indexed oldEngine, address indexed newEngine);
+
+    /// @notice Wire the ScoreEngine settlement reads. Governance only. patch_settlement_snapshots
+    ///         (review R3 C-3s): the zero address is rejected and the change is evented; an unwired
+    ///         engine settles on the direct ratio only in test/bootstrap deployments, and
+    ///         verify-genesis asserts the wiring on every network.
     function setScoreEngine(address newScoreEngine) external onlyGovernance {
+        if (newScoreEngine == address(0)) {
+            revert ZeroAddress();
+        }
+        address old = address(scoreEngine);
         scoreEngine = IScoreEngineV2(newScoreEngine);
+        emit ScoreEngineSet(old, newScoreEngine);
     }
 
     function setProtocolPolicy(address newProtocolPolicy) external onlyGovernance {
@@ -437,35 +452,19 @@ contract StakeEngine is GovernedUpgradeable {
         PostState storage ps = posts[postId];
         SideQueue storage q = ps.sides[side];
         uint256 removed = 0;
-        // S-08 FIX: single forward read/write compaction pass instead of reverse
-        // swap-and-pop, so survivors keep arrival order. Swap-and-pop moved the
-        // LAST staker into the ghost's slot, promoting them at another honest
-        // staker's expense.
-        uint256 write = 0;
-        uint256 len = q.lots.length;
-        for (uint256 read = 0; read < len; read++) {
-            StakeLot storage src = q.lots[read];
-            if (src.amount == 0) {
-                _setLotIndex(ps, src.staker, side, 0);
+        // S-08 FIX: shift-compact (arrival order preserved), never swap-and-pop. Walk from the tail
+        // so each removal only moves lots behind the ghost.
+        for (uint256 i = q.lots.length; i > 0; i--) {
+            if (q.lots[i - 1].amount == 0) {
+                _setLotIndex(ps, q.lots[i - 1].staker, side, 0);
+                _removeRankedAt(ps, q, side, i - 1);
                 removed++;
-                continue;
             }
-            if (write != read) {
-                q.lots[write] = src;
-            }
-            _setLotIndex(ps, q.lots[write].staker, side, write + 1);
-            write++;
-        }
-        for (uint256 k = 0; k < removed; k++) {
-            q.lots.pop();
         }
         if (removed == 0) {
             revert NoGhostLots();
         }
-
-        // Recompute positions after swap-and-pop changes array layout
         _recomputeWeightedPositions(postId, side, q);
-
         emit LotsCompacted(postId, side, removed);
     }
 
@@ -508,7 +507,7 @@ contract StakeEngine is GovernedUpgradeable {
         if (msg.sender != address(this)) {
             revert NotGuardianOrGovernance(); // self-call only
         }
-        _maybeSnapshot(postId, _currentEpoch());
+        _maybeSnapshot(postId, _currentEpoch(), true); // user path: defer on stale parents
     }
 
     function getPostTotals(uint256 postId) external view returns (uint256 support, uint256 challenge) {
@@ -520,7 +519,7 @@ contract StakeEngine is GovernedUpgradeable {
         if (snapshotEpoch == 0 || currentEpoch <= snapshotEpoch) {
             return (storedS, storedC);
         }
-        return _projectTotals(ps, currentEpoch);
+        return _projectTotals(postId, ps, currentEpoch);
     }
 
     function getUserStake(address user, uint256 postId, uint8 side) external view returns (uint256) {
@@ -658,7 +657,7 @@ contract StakeEngine is GovernedUpgradeable {
             revert NotEnoughStake();
         }
         uint256 removed = _decreaseUser(postId, side, amount, _msgSender());
-        _updateSMax(postId, settledTotal[postId]); // ruling 3b: settled, not live
+        _refeedSMax(postId); // ruling 3b (settled, not live) + review R3 C-4 (drain snap-down)
         if (!ERC20_TOKEN.transfer(_msgSender(), removed)) {
             revert TransferFailed();
         }
@@ -671,7 +670,7 @@ contract StakeEngine is GovernedUpgradeable {
 
     function updatePost(uint256 postId) external nonReentrant {
         uint256 epoch = _currentEpoch();
-        _forceSnapshot(postId, epoch);
+        _forceSnapshot(postId, epoch, false); // keeper path: always completes
     }
 
     // ------------------------------------------------------------
@@ -742,7 +741,7 @@ contract StakeEngine is GovernedUpgradeable {
             }
         }
 
-        _updateSMax(postId, settledTotal[postId]); // ruling 3b: settled, not live
+        _refeedSMax(postId); // ruling 3b (settled, not live) + review R3 C-4 (drain snap-down)
     }
 
     /// @dev Withdraw helper for setStake (no reentrancy guard - caller is guarded)
@@ -761,23 +760,33 @@ contract StakeEngine is GovernedUpgradeable {
         emit StakeWithdrawn(postId, user, side, removed, true);
     }
 
-    function _maybeSnapshot(uint256 postId, uint256 currentEpoch) internal {
+    function _maybeSnapshot(uint256 postId, uint256 currentEpoch, bool strict) internal {
         PostState storage ps = posts[postId];
         uint256 lastEpoch = ps.lastSnapshotEpoch;
         if (lastEpoch == 0) {
             ps.lastSnapshotEpoch = currentEpoch;
             return;
         }
+        // patch_settlement_snapshots (review R3 N-1): a legacy post (no observations yet) gets its
+        // window-start observation BEFORE any mutation can write a later one, so standing stake
+        // counts for the whole window it stood.
+        if (observations[postId].length == 0) {
+            uint256 a_ = ps.sides[0].total;
+            uint256 d_ = ps.sides[1].total;
+            if (a_ + d_ != 0) {
+                observations[postId].seed(lastEpoch * EPOCH_LENGTH, a_, d_);
+            }
+        }
         uint256 periodInEpochs = snapshotPeriod / EPOCH_LENGTH;
         if (periodInEpochs == 0) {
             periodInEpochs = 1;
         }
         if (currentEpoch >= lastEpoch + periodInEpochs) {
-            _forceSnapshot(postId, currentEpoch);
+            _forceSnapshot(postId, currentEpoch, strict);
         }
     }
 
-    function _forceSnapshot(uint256 postId, uint256 currentEpoch) internal {
+    function _forceSnapshot(uint256 postId, uint256 currentEpoch, bool strict) internal {
         PostState storage ps = posts[postId];
         uint256 lastEpoch = ps.lastSnapshotEpoch;
         if (lastEpoch == 0 || currentEpoch <= lastEpoch) {
@@ -801,27 +810,25 @@ contract StakeEngine is GovernedUpgradeable {
         settledTotal[postId] = T;
         _updateSMax(postId, T);
 
-        if (T == 0 || sMax == 0) {
-            ps.lastSnapshotEpoch = currentEpoch;
-            return;
-        }
-
         // patch_game_b: legacy posts (pre-upgrade) get their first observation at the window
         // start with the pre-settlement totals, so standing stake counts for this window.
         if (T != 0) {
             observations[postId].seed(lastEpoch * EPOCH_LENGTH, A, D);
         }
-        // patch_game_b (v17 §3.2): truth pressure and the accruing side come from the
-        // effective pool over this window; participation stays on direct T.
+        // patch_settlement_snapshots (whitepaper v18 §3.2/§4.2.6): truth pressure and the accruing
+        // side come from the effective pool over this window, assembled by the ScoreEngine from this
+        // post's window-averaged direct totals and its parents'/links' SNAPSHOTS (no recursion);
+        // the call also writes THIS post's snapshot — so it runs even for an empty post, or children
+        // would read a stale record. Participation stays on direct T.
         uint256 S = A;
         uint256 C = D;
         if (address(scoreEngine) != address(0)) {
-            // fix_cycle_freeze (report 2026-09-26, Ibnu76): `exact` is the walk's MEMO flag ("depends on
-            // the arrival path, do not cache"), not a correctness flag. A cycle-cut or depth-truncated
-            // contribution is 0 BY DEFINITION (whitepaper §4.3), and the settling post's pool is
-            // deterministic for that root. Refusing to settle on !exact let anyone freeze any claim for
-            // ~10 VSP by linking a 2-node cycle above it. Settlement never inspects the flag.
-            (S, C,) = scoreEngine.effectivePoolWindow(postId, lastEpoch * EPOCH_LENGTH, currentEpoch * EPOCH_LENGTH);
+            (S, C) = scoreEngine.settlePool(postId, lastEpoch * EPOCH_LENGTH, currentEpoch * EPOCH_LENGTH, strict);
+        }
+
+        if (T == 0 || sMax == 0) {
+            ps.lastSnapshotEpoch = currentEpoch;
+            return;
         }
         if (S == C) {
             ps.lastSnapshotEpoch = currentEpoch;
@@ -877,21 +884,6 @@ contract StakeEngine is GovernedUpgradeable {
         emit PostUpdated(postId, currentEpoch, qs.total, qc.total);
     }
 
-    // patch_prC_rulings S-12: _rescalePositions removed (dead code). Positions
-    // are recomputed as midpoints (< q.total) after every queue mutation and
-    // settlement, so the rescale condition never fired outside the neutral
-    // branch, where it was a no-op. The _applyEpoch clamp is the safety net.
-    /// @dev Applies epoch gains/losses with midpoint positional weighting.
-    ///      Each lot's delta = amount * rBase * (T - wPos) / T.
-    ///      No redistribution: unminted rate is simply not created.
-    ///      Individual earn is capped: (T - wPos) / T <= 1, so delta <= amount * rBase.
-    function _applyEpoch(SideQueue storage q, bool supportWins, bool isSupportSide, uint256 rBase)
-        internal
-        returns (uint256 minted, uint256 burned)
-    {
-        return _applyEpochFor(0, 0, 0, 0, q, supportWins, isSupportSide, rBase);
-    }
-
     /// @dev ruling 2b: each lot's delta (gain or loss) is scaled by the share of
     ///      the settlement window [windowStart, windowEnd) it was present for.
     ///      windowLen == 0 (legacy caller) means "no proration".
@@ -916,23 +908,11 @@ contract StakeEngine is GovernedUpgradeable {
             if (lot.amount == 0) {
                 continue;
             }
-            // midpointRate = (T - wPos) / T, clamped to [0, RAY]
-            uint256 behindMe = lot.weightedPosition < T ? T - lot.weightedPosition : 0;
-            uint256 midpointRate = (behindMe * RAY) / T;
-            if (midpointRate > RAY) {
-                midpointRate = RAY;
-            }
-            // delta = amount * rBase * midpointRate / RAY (512-bit intermediate,
-            // single rounding), then prorated by presence with a second exact
-            // mulDiv — no divide-before-multiply, no timestamp equality.
-            uint256 delta = Math.mulDiv(lot.amount * rBase, midpointRate, RAY * RAY);
-            if (windowEnd > windowStart) {
-                uint256 et = entryTime[postId][side][lot.staker];
-                if (et > windowStart) {
-                    uint256 present = et < windowEnd ? windowEnd - et : 0;
-                    delta = Math.mulDiv(delta, present, windowEnd - windowStart);
-                }
-            }
+            // delta = amount × rBase × midpoint weight, prorated by presence (TimeWeighted.lotDelta —
+            // the same function the projection uses, so view == materialised).
+            uint256 delta = TimeWeighted.lotDelta(
+                lot.amount, lot.weightedPosition, T, rBase, entryTime[postId][side][lot.staker], windowStart, windowEnd
+            );
             if (delta < 1) {
                 continue;
             }
@@ -946,7 +926,7 @@ contract StakeEngine is GovernedUpgradeable {
             }
         }
         // patch_h1a_bucket: settle the pooled tail bucket in O(1)
-        (uint256 bMint, uint256 bBurn) = _settleBucket(q, aligned, rBase);
+        (uint256 bMint, uint256 bBurn) = _settleBucket(postId, side, windowStart, windowEnd, q, aligned, rBase);
         minted += bMint;
         burned += bBurn;
     }
@@ -954,12 +934,6 @@ contract StakeEngine is GovernedUpgradeable {
     // ------------------------------------------------------------
     // Internal: Lot management
     // ------------------------------------------------------------
-
-    /// @dev Retired by patch_h1a_bucket — superseded by _increaseUser (cap+bucket
-    ///      aware). Retained as a guarded stub so any stale caller fails loudly.
-    function _addOrMergeLot(uint256 postId, uint8 side, uint256 amount, address staker) internal {
-        _increaseUser(postId, side, amount, staker);
-    }
 
     function _getLotIndex(PostState storage ps, address user, uint8 side) internal view returns (uint256) {
         if (side == 0) {
@@ -980,78 +954,106 @@ contract StakeEngine is GovernedUpgradeable {
     // Internal: View projection
     // ------------------------------------------------------------
 
-    function _projectTotals(PostState storage ps, uint256 currentEpoch)
+    /// @dev patch_settlement_snapshots (review CI-1, spec V.8): ONE rate path for projection and
+    ///      settlement. The projection asks the ScoreEngine for the same window pool settlement will
+    ///      (previewPoolWindow: window-averaged direct totals + snapshot contributions), floors sMax at T
+    ///      as settlement does (ruling 3b), and derives rBase through the same library function.
+    function _projectRate(uint256 postId, PostState storage ps, uint256 currentEpoch)
+        internal
+        view
+        returns (uint256 rBase, bool supportWins, uint256 wStart, uint256 wEnd)
+    {
+        uint256 T = ps.sides[0].total + ps.sides[1].total;
+        if (T == 0) {
+            return (0, false, 0, 0);
+        }
+        wStart = ps.lastSnapshotEpoch * EPOCH_LENGTH;
+        wEnd = currentEpoch * EPOCH_LENGTH;
+        uint256 S = ps.sides[0].total;
+        uint256 C = ps.sides[1].total;
+        if (address(scoreEngine) != address(0)) {
+            (S, C) = scoreEngine.previewPoolWindow(postId, wStart, wEnd);
+        }
+        if (S == C) {
+            return (0, false, wStart, wEnd);
+        }
+        uint256 el = currentEpoch > sMaxLastUpdatedEpoch ? currentEpoch - sMaxLastUpdatedEpoch : 0;
+        if (el > sMaxDecayMaxEpochs) {
+            el = sMaxDecayMaxEpochs;
+        }
+        // settlement re-registers THIS post's total first, so its own tracker entry reads as T
+        uint256 leader = topPosts[0].postId == postId ? topPosts[1].total : topPosts[0].total;
+        uint256 projSMax = TimeWeighted.projectSMax(sMax, leader, T, sMaxDecayRateRay, el);
+        rBase = TimeWeighted.rBase(
+            S,
+            C,
+            T,
+            projSMax,
+            protocolPolicy.stakeIntRateMinRay(),
+            protocolPolicy.stakeIntRateMaxRay(),
+            EPOCH_LENGTH,
+            currentEpoch - ps.lastSnapshotEpoch,
+            YEAR_LENGTH
+        );
+        supportWins = S > C;
+    }
+
+    function _projectTotals(uint256 postId, PostState storage ps, uint256 currentEpoch)
         internal
         view
         returns (uint256 projS, uint256 projC)
     {
-        SideQueue storage qs = ps.sides[0];
-        SideQueue storage qc = ps.sides[1];
-        uint256 A = qs.total;
-        uint256 D = qc.total;
-        uint256 T = A + D;
-        if (T == 0) {
-            return (A, D);
+        (uint256 rBase, bool supportWins, uint256 wStart, uint256 wEnd) = _projectRate(postId, ps, currentEpoch);
+        if (rBase == 0) {
+            return (ps.sides[0].total, ps.sides[1].total);
         }
-        int256 vsNum = int256(2 * A) - int256(T);
-        if (vsNum == 0) {
-            return (A, D);
-        }
-        bool supportWins = vsNum > 0;
-        uint256 absVS = uint256(vsNum > 0 ? vsNum : -vsNum);
-        uint256 epochsElapsed = currentEpoch - ps.lastSnapshotEpoch;
-        // S-10 FIX: settlement (_forceSnapshot) divides by the RAW sMax, so the
-        // view must too, otherwise V.8 (view == materialised) breaks whenever
-        // topPosts is empty and the decay fallback is live.
-        uint256 projSMax = sMax;
-        // ruling 3b: settlement registers T into sMax BEFORE applying the epoch,
-        // so the projection floors sMax at T (and never bails on sMax == 0).
-        if (projSMax < T) {
-            projSMax = T;
-        }
-        uint256 vRay = (absVS * RAY) / T;
-        uint256 participationRay = (T * RAY) / projSMax;
-        if (participationRay > RAY) {
-            participationRay = RAY;
-        }
-        uint256 rMin = (protocolPolicy.stakeIntRateMinRay() * EPOCH_LENGTH * epochsElapsed) / YEAR_LENGTH;
-        uint256 rMax = (protocolPolicy.stakeIntRateMaxRay() * EPOCH_LENGTH * epochsElapsed) / YEAR_LENGTH;
-        uint256 rBase = rMin + ((rMax - rMin) * vRay * participationRay) / (RAY * RAY);
-        projS = _projectSideTotal(qs, supportWins, true, rBase);
-        projC = _projectSideTotal(qc, supportWins, false, rBase);
+        projS = _projectSideTotal(postId, 0, wStart, wEnd, ps.sides[0], supportWins, rBase);
+        projC = _projectSideTotal(postId, 1, wStart, wEnd, ps.sides[1], supportWins, rBase);
     }
 
-    function _projectSideTotal(SideQueue storage q, bool supportWins, bool isSupportSide, uint256 rBase)
-        internal
-        view
-        returns (uint256 total)
-    {
+    /// @dev Mirrors _applyEpochFor lot by lot (midpoint weight, presence proration) and the bucket.
+    function _projectSideTotal(
+        uint256 postId,
+        uint8 side,
+        uint256 wStart,
+        uint256 wEnd,
+        SideQueue storage q,
+        bool supportWins,
+        uint256 rBase
+    ) internal view returns (uint256 total) {
         if (q.total == 0 || rBase == 0) {
             return q.total;
         }
-        bool aligned = (supportWins && isSupportSide) || (!supportWins && !isSupportSide);
+        bool aligned = supportWins == (side == 0);
         uint256 T = q.total;
-
-        total = 0;
         for (uint256 i = 0; i < q.lots.length; i++) {
             StakeLot storage lot = q.lots[i];
             if (lot.amount == 0) {
                 continue;
             }
-            uint256 behindMe = lot.weightedPosition < T ? T - lot.weightedPosition : 0;
-            uint256 midpointRate = (behindMe * RAY) / T;
-            if (midpointRate > RAY) {
-                midpointRate = RAY;
-            }
-            uint256 delta = (lot.amount * rBase * midpointRate) / (RAY * RAY);
-            if (aligned) {
-                total += lot.amount + delta;
-            } else {
-                uint256 loss = delta > lot.amount ? lot.amount : delta;
-                total += lot.amount - loss;
-            }
+            total += _projectLot(postId, side, wStart, wEnd, lot, T, aligned, rBase);
         }
-        total += _projectBucket(q, aligned, rBase); // patch_h1a_bucket
+        total += _projectBucket(postId, side, wStart, wEnd, q, aligned, rBase);
+    }
+
+    function _projectLot(
+        uint256 postId,
+        uint8 side,
+        uint256 wStart,
+        uint256 wEnd,
+        StakeLot storage lot,
+        uint256 sideTotal,
+        bool aligned,
+        uint256 rBase
+    ) internal view returns (uint256) {
+        uint256 delta = TimeWeighted.lotDelta(
+            lot.amount, lot.weightedPosition, sideTotal, rBase, entryTime[postId][side][lot.staker], wStart, wEnd
+        );
+        if (aligned) {
+            return lot.amount + delta;
+        }
+        uint256 loss = delta > lot.amount ? lot.amount : delta;
+        return lot.amount - loss;
     }
 
     function _projectLotValue(uint256 postId, PostState storage ps, StakeLot storage lot, uint256 currentEpoch)
@@ -1059,68 +1061,12 @@ contract StakeEngine is GovernedUpgradeable {
         view
         returns (uint256)
     {
-        SideQueue storage qs = ps.sides[0];
-        SideQueue storage qc = ps.sides[1];
-        uint256 A = qs.total;
-        uint256 D = qc.total;
-        uint256 T = A + D;
-        if (T == 0) {
+        (uint256 rBase, bool supportWins, uint256 wStart, uint256 wEnd) = _projectRate(postId, ps, currentEpoch);
+        uint256 sideTotal = ps.sides[lot.side].total;
+        if (rBase == 0 || sideTotal == 0) {
             return lot.amount;
         }
-        int256 vsNum = int256(2 * A) - int256(T);
-        if (vsNum == 0) {
-            return lot.amount;
-        }
-        bool supportWins = vsNum > 0;
-        bool isSupportSide = lot.side == 0;
-        bool aligned = (supportWins && isSupportSide) || (!supportWins && !isSupportSide);
-        uint256 absVS = uint256(vsNum > 0 ? vsNum : -vsNum);
-        uint256 epochsElapsed = currentEpoch - ps.lastSnapshotEpoch;
-        // S-10 FIX (second site): same reasoning as _projectTotals.
-        uint256 projSMax = sMax;
-        // ruling 3b: settlement registers T into sMax BEFORE applying the epoch,
-        // so the projection floors sMax at T (and never bails on sMax == 0).
-        if (projSMax < T) {
-            projSMax = T;
-        }
-        uint256 vRay = (absVS * RAY) / T;
-        uint256 participationRay = (T * RAY) / projSMax;
-        if (participationRay > RAY) {
-            participationRay = RAY;
-        }
-        uint256 rMin = (protocolPolicy.stakeIntRateMinRay() * EPOCH_LENGTH * epochsElapsed) / YEAR_LENGTH;
-        uint256 rMax = (protocolPolicy.stakeIntRateMaxRay() * EPOCH_LENGTH * epochsElapsed) / YEAR_LENGTH;
-        uint256 rBase = rMin + ((rMax - rMin) * vRay * participationRay) / (RAY * RAY);
-
-        SideQueue storage mySide = isSupportSide ? qs : qc;
-        uint256 sideTotal = mySide.total;
-        if (sideTotal == 0 || rBase == 0) {
-            return lot.amount;
-        }
-
-        uint256 behindMe = lot.weightedPosition < sideTotal ? sideTotal - lot.weightedPosition : 0;
-        uint256 midpointRate = (behindMe * RAY) / sideTotal;
-        if (midpointRate > RAY) {
-            midpointRate = RAY;
-        }
-        uint256 delta = (lot.amount * rBase * midpointRate) / (RAY * RAY);
-        // ruling 2b: mirror the settlement's presence proration so the view
-        // matches what will materialise (S-10 view/materialised invariant).
-        {
-            uint256 wStart = ps.lastSnapshotEpoch * EPOCH_LENGTH;
-            uint256 wEnd = currentEpoch * EPOCH_LENGTH;
-            uint256 et = entryTime[postId][lot.side][lot.staker];
-            if (wEnd > wStart && et > wStart) {
-                uint256 present = et < wEnd ? wEnd - et : 0;
-                delta = Math.mulDiv(delta, present, wEnd - wStart);
-            }
-        }
-        if (aligned) {
-            return lot.amount + delta;
-        } else {
-            uint256 loss = delta > lot.amount ? lot.amount : delta;
-            return lot.amount - loss;
-        }
+        return _projectLot(postId, lot.side, wStart, wEnd, lot, sideTotal, supportWins == (lot.side == 0), rBase);
     }
 
     // ------------------------------------------------------------
@@ -1132,44 +1078,7 @@ contract StakeEngine is GovernedUpgradeable {
     }
 
     function _updateSMax(uint256 postId, uint256 postTotal) internal {
-        uint256 slot = type(uint256).max;
-        for (uint256 i = 0; i < TRACKED_POSTS; i++) {
-            if (topPosts[i].postId == postId && topPosts[i].total > 0) {
-                slot = i;
-                break;
-            }
-        }
-        if (slot != type(uint256).max) {
-            topPosts[slot].total = postTotal;
-            while (slot > 0 && topPosts[slot].total > topPosts[slot - 1].total) {
-                TopPost memory tmp = topPosts[slot];
-                topPosts[slot] = topPosts[slot - 1];
-                topPosts[slot - 1] = tmp;
-                slot--;
-            }
-            while (slot < TRACKED_POSTS - 1 && topPosts[slot].total < topPosts[slot + 1].total) {
-                TopPost memory tmp = topPosts[slot];
-                topPosts[slot] = topPosts[slot + 1];
-                topPosts[slot + 1] = tmp;
-                slot++;
-            }
-        } else {
-            for (uint256 i = 0; i < TRACKED_POSTS; i++) {
-                if (postTotal > topPosts[i].total) {
-                    for (uint256 j = TRACKED_POSTS - 1; j > i; j--) {
-                        topPosts[j] = topPosts[j - 1];
-                    }
-                    topPosts[i] = TopPost(postId, postTotal);
-                    break;
-                }
-            }
-        }
-        for (uint256 i = 0; i < TRACKED_POSTS; i++) {
-            if (topPosts[i].total == 0) {
-                topPosts[i] = TopPost(0, 0);
-            }
-        }
-        uint256 leaderTotal = topPosts[0].total;
+        (uint256 leaderTotal, uint256 leaderId) = TimeWeighted.trackerUpdate(topPosts, postId, postTotal);
         uint256 currentEpoch = _currentEpoch();
         if (leaderTotal > 0) {
             if (leaderTotal >= sMax) {
@@ -1186,7 +1095,7 @@ contract StakeEngine is GovernedUpgradeable {
                     sMax = leaderTotal;
                 }
             }
-            sMaxPostId = topPosts[0].postId;
+            sMaxPostId = leaderId;
         } else {
             sMax = _applySMaxDecay(currentEpoch);
         }
@@ -1200,11 +1109,33 @@ contract StakeEngine is GovernedUpgradeable {
     ///         largest known posts; anyone else can close a deviation the
     ///         moment they see one (I.4 restoration is permissionless).
     function refreshSMax(uint256 postId) external nonReentrant {
-        _maybeSnapshot(postId, _currentEpoch());
+        _maybeSnapshot(postId, _currentEpoch(), false);
         PostState storage ps = posts[postId];
         uint256 total = settledTotal[postId]; // ruling 3b: settled, not live
         _updateSMax(postId, total);
         emit SMaxRefreshed(postId, total, sMax);
+    }
+
+    /// @dev patch_settlement_snapshots (review R3 C-4): after a user mutation. Ordinarily re-feed the
+    ///      tracker with the settled total (ruling 3b). But when the post is drained to zero AND it is
+    ///      the post that defines sMax, reset its settled total, drop it from the tracker and snap
+    ///      sMax to the remaining tracked leader in the same transaction — otherwise a transient
+    ///      leader that settled once and left would pin every post's participation for the whole
+    ///      decay window (never-snap-down protects against dust drag, not against ghosts).
+    function _refeedSMax(uint256 postId) internal {
+        PostState storage ps = posts[postId];
+        if (ps.sides[0].total == 0 && ps.sides[1].total == 0) {
+            settledTotal[postId] = 0;
+            bool wasLeader = sMaxPostId == postId;
+            _updateSMax(postId, 0);
+            if (wasLeader) {
+                sMax = topPosts[0].total;
+                sMaxPostId = topPosts[0].postId;
+                sMaxLastUpdatedEpoch = _currentEpoch();
+            }
+            return;
+        }
+        _updateSMax(postId, settledTotal[postId]);
     }
 
     function _applySMaxDecay(uint256 currentEpoch) internal returns (uint256) {
@@ -1216,13 +1147,7 @@ contract StakeEngine is GovernedUpgradeable {
         if (elapsed > sMaxDecayMaxEpochs) {
             elapsed = sMaxDecayMaxEpochs;
         }
-        uint256 decayed = sMax;
-        for (uint256 i = 0; i < elapsed; i++) {
-            decayed = (decayed * sMaxDecayRateRay) / RAY;
-            if (decayed == 0) {
-                break;
-            }
-        }
+        uint256 decayed = TimeWeighted.decay(sMax, sMaxDecayRateRay, elapsed);
         sMax = decayed;
         sMaxLastUpdatedEpoch = currentEpoch;
         return decayed;
@@ -1230,7 +1155,7 @@ contract StakeEngine is GovernedUpgradeable {
 
     function rescanSMax(uint256[] calldata postIds) external onlyGovernance {
         for (uint256 i = 0; i < TRACKED_POSTS; i++) {
-            topPosts[i] = TopPost(0, 0);
+            topPosts[i] = TimeWeighted.TopPost(0, 0);
         }
         for (uint256 i = 0; i < postIds.length; i++) {
             uint256 pid = postIds[i];
@@ -1242,42 +1167,6 @@ contract StakeEngine is GovernedUpgradeable {
             _updateSMax(pid, total);
         }
         emit SMaxRescanned(topPosts[0].total, topPosts[0].postId);
-    }
-
-    /// @dev Returns the top 3 of the TRACKED_POSTS-slot tracker (view kept at
-    ///      three pairs for ABI stability across the widening — patch_prC_rulings).
-    function getTopPosts()
-        external
-        view
-        returns (uint256 p0, uint256 t0, uint256 p1, uint256 t1, uint256 p2, uint256 t2)
-    {
-        return (
-            topPosts[0].postId,
-            topPosts[0].total,
-            topPosts[1].postId,
-            topPosts[1].total,
-            topPosts[2].postId,
-            topPosts[2].total
-        );
-    }
-
-    function _projectSMaxDecay(uint256 currentEpoch) internal view returns (uint256) {
-        if (sMax == 0 || currentEpoch <= sMaxLastUpdatedEpoch) {
-            return sMax;
-        }
-        uint256 elapsed = currentEpoch - sMaxLastUpdatedEpoch;
-        if (elapsed > sMaxDecayMaxEpochs) {
-            elapsed = sMaxDecayMaxEpochs;
-        }
-        uint256 decayed = sMax;
-        for (uint256 i = 0; i < elapsed; i++) {
-            decayed = (decayed * sMaxDecayRateRay) / RAY;
-            if (decayed == 0) {
-                break;
-            }
-        }
-        uint256 leader = topPosts[0].total;
-        return decayed > leader ? decayed : leader;
     }
 
     /// @dev Recompute weighted positions as midpoints: cumBefore + amount/2.
@@ -1336,7 +1225,26 @@ contract StakeEngine is GovernedUpgradeable {
     }
 
     /// @dev Add `amount` to a (new or existing) bucket member. O(1).
-    function _bucketAdd(PostState storage ps, SideQueue storage q, uint8 side, address user, uint256 amount) internal {
+    function _bucketAdd(
+        uint256 postId,
+        PostState storage ps,
+        SideQueue storage q,
+        uint8 side,
+        address user,
+        uint256 amount
+    ) internal {
+        // patch_settlement_snapshots (review R3 F-B): the bucket ages like one lot — its entry time is
+        // the live-amount-weighted blend of its members' entry times (the member's own entry time is
+        // already amount-weighted across top-ups by _increaseUser).
+        {
+            uint256 etU = entryTime[postId][side][user];
+            if (etU != 0) {
+                uint256 liveB = _bucketLive(q);
+                uint256 etB = bucketEntryTime[postId][side];
+                bucketEntryTime[postId][side] =
+                    (liveB == 0 || etB == 0) ? etU : (liveB * etB + amount * etU) / (liveB + amount);
+            }
+        }
         // patch_prC_rulings S-01: honest init. Index 0 <=> no member has ever
         // entered (settlement floors at 1, so decay cannot write 0), and with
         // no members there are no shares to revalue — initializing to RAY here
@@ -1405,12 +1313,16 @@ contract StakeEngine is GovernedUpgradeable {
         // patch_h1b_promotion: never demote a 0-amount ghost into the bucket/heap;
         // just drop it (this also compacts ghosts during rebalance).
         if (vAmount > 0) {
-            _bucketAdd(ps, q, side, vStaker, vAmount);
+            _bucketAdd(postId, ps, q, side, vStaker, vAmount);
             emit LotDemoted(postId, side, vStaker, vAmount);
         }
-        // shift survivors [sIdx+1..end) left by one, fixing their lot indices
+        _removeRankedAt(ps, q, side, sIdx);
+    }
+
+    /// @dev Remove q.lots[i] by shift-compacting the tail (arrival order preserved), fixing indices.
+    function _removeRankedAt(PostState storage ps, SideQueue storage q, uint8 side, uint256 i) internal {
         uint256 last = q.lots.length - 1;
-        for (uint256 i = sIdx; i < last; i++) {
+        for (; i < last; i++) {
             q.lots[i] = q.lots[i + 1];
             _setLotIndex(ps, q.lots[i].staker, side, i + 1);
         }
@@ -1434,48 +1346,30 @@ contract StakeEngine is GovernedUpgradeable {
         }
 
         uint256 idx = _getLotIndex(ps, user, side);
+        if (idx != 0 && q.lots[idx - 1].amount == 0) {
+            // S-02 FIX v2: remove the ghost from the array (shift-compact, preserving arrival
+            // order) before re-entering, so one address can never hold both a ghost entry and a
+            // live entry. The re-entry then takes the same route as a brand-new staker below.
+            _removeRankedAt(ps, q, side, idx - 1);
+            _setLotIndex(ps, user, side, 0);
+            idx = 0;
+        }
         if (idx != 0) {
-            if (q.lots[idx - 1].amount == 0) {
-                // S-02 FIX v2: remove the ghost from the array (shift-compact,
-                // preserving arrival order) before re-entering, so one address can
-                // never hold both a ghost entry and a live entry.
-                uint256 gIdx = idx - 1;
-                uint256 lastG = q.lots.length - 1;
-                for (uint256 i = gIdx; i < lastG; i++) {
-                    q.lots[i] = q.lots[i + 1];
-                    _setLotIndex(ps, q.lots[i].staker, side, i + 1);
-                }
-                q.lots.pop();
-                _setLotIndex(ps, user, side, 0);
-
-                if (q.lots.length < MAX_RANKED_LOTS) {
-                    _pushRankedLot(ps, q, side, user, amount);
-                } else {
-                    uint256 sIdxG = _smallestRankedIndex(q);
-                    if (amount > q.lots[sIdxG].amount) {
-                        _demoteRankedToBucket(postId, ps, q, side, sIdxG);
-                        _pushRankedLot(ps, q, side, user, amount);
-                    } else {
-                        _bucketAdd(ps, q, side, user, amount);
-                    }
-                }
-            } else {
-                // ruling 1c: capital-weighted position. New capital enters at
-                // the tail midpoint (T_now + amount/2); the lot's position
-                // becomes the amount-weighted average of old and new entries.
-                StakeLot storage lot = q.lots[idx - 1];
-                uint256 oldAmt = lot.amount;
-                uint256 tailEntry = q.total + amount / 2;
-                uint256 blended = (oldAmt * lot.weightedPosition + amount * tailEntry) / (oldAmt + amount);
-                uint256 natural =
-                    (lot.weightedPosition > posOffset[postId][side][user]
-                                ? lot.weightedPosition - posOffset[postId][side][user]
-                                : 0) + amount / 2; // natural midpoint after growth: cumBefore + newAmt/2
-                posOffset[postId][side][user] = blended > natural ? blended - natural : 0;
-                lot.amount += amount; // existing ranked staker
-            }
+            // ruling 1c: capital-weighted position. New capital enters at
+            // the tail midpoint (T_now + amount/2); the lot's position
+            // becomes the amount-weighted average of old and new entries.
+            StakeLot storage lot = q.lots[idx - 1];
+            uint256 oldAmt = lot.amount;
+            uint256 tailEntry = q.total + amount / 2;
+            uint256 blended = (oldAmt * lot.weightedPosition + amount * tailEntry) / (oldAmt + amount);
+            uint256 natural =
+                (lot.weightedPosition > posOffset[postId][side][user]
+                            ? lot.weightedPosition - posOffset[postId][side][user]
+                            : 0) + amount / 2; // natural midpoint after growth: cumBefore + newAmt/2
+            posOffset[postId][side][user] = blended > natural ? blended - natural : 0;
+            lot.amount += amount; // existing ranked staker
         } else if (_getBucketShares(ps, user, side) != 0) {
-            _bucketAdd(ps, q, side, user, amount); // existing bucket member (may promote via _rebalance)
+            _bucketAdd(postId, ps, q, side, user, amount); // existing bucket member (may promote via _rebalance)
         } else if (q.lots.length < MAX_RANKED_LOTS) {
             _pushRankedLot(ps, q, side, user, amount); // new ranked lot
         } else {
@@ -1484,14 +1378,14 @@ contract StakeEngine is GovernedUpgradeable {
                 _demoteRankedToBucket(postId, ps, q, side, sIdx); // evict smallest, append new at tail
                 _pushRankedLot(ps, q, side, user, amount);
             } else {
-                _bucketAdd(ps, q, side, user, amount); // too small for a slot -> bucket
+                _bucketAdd(postId, ps, q, side, user, amount); // too small for a slot -> bucket
             }
         }
         _rebalance(postId, ps, q, side); // patch_h1b_promotion: keep ranked = the C largest
         _recomputeWeightedPositions(postId, side, q);
         _recomputeSideTotal(q); // exact side total (ranked + bucketLive)
         _observe(postId); // patch_game_b
-        _updateSMax(postId, settledTotal[postId]); // ruling 3b: settled, not live
+        _refeedSMax(postId); // ruling 3b (settled, not live) + review R3 C-4 (drain snap-down)
     }
 
     /// @dev Decrease a user's position by up to `amount`. Returns value removed.
@@ -1518,7 +1412,15 @@ contract StakeEngine is GovernedUpgradeable {
 
     /// @dev Project the bucket's live value forward one settlement at `rBase`
     ///      using the blended tail-midpoint rate. Mirrors _projectSideTotal.
-    function _projectBucket(SideQueue storage q, bool aligned, uint256 rBase) internal view returns (uint256) {
+    function _projectBucket(
+        uint256 postId,
+        uint8 side,
+        uint256 wStart,
+        uint256 wEnd,
+        SideQueue storage q,
+        bool aligned,
+        uint256 rBase
+    ) internal view returns (uint256) {
         uint256 live = _bucketLive(q);
         if (live == 0 || rBase == 0) {
             return live;
@@ -1527,42 +1429,23 @@ contract StakeEngine is GovernedUpgradeable {
         if (T == 0) {
             return live;
         }
-        uint256 rankedTotal = T - live;
-        uint256 wPosB = rankedTotal + live / 2;
-        uint256 behind = wPosB < T ? T - wPosB : 0;
-        // Ray-math ordering: single multiply-first truncation, mirroring the
-        // ranked-lot delta = amount*rBase*midpointRate/(RAY*RAY). behind <= T so
-        // gRay <= rBase. patch_prC_rulings S-05: rBase is NOT bounded by RAY —
-        // rMax scales with epochsElapsed (annualized rate x elapsed window), so
-        // under dormancy rBase can exceed RAY (proven at deploy rates from ~530
-        // elapsed epochs, and far sooner at the 5e18 policy cap). The gRay>=RAY
-        // wipe branch below is therefore LIVE, not dead: it floors a losing
-        // bucket at total loss, which is the correct bound.
-        uint256 gRay = (rBase * behind) / T;
-        // patch_prC_rulings S-01/V.8: project through the INDEX with the same
-        // operations and floor as _settleBucket, so view == materialized to the
-        // wei even in the wipe/floor regime (the old live-based formula had a
-        // different truncation order).
-        uint256 ix = _bucketIndex(q);
-        uint256 newIx;
-        if (aligned) {
-            newIx = (ix * (RAY + gRay)) / RAY;
-        } else {
-            uint256 factor = gRay >= RAY ? 0 : RAY - gRay;
-            newIx = (ix * factor) / RAY;
-        }
-        if (newIx == 0) {
-            newIx = 1;
-        }
+        uint256 newIx = TimeWeighted.bucketIndexAfter(
+            _bucketIndex(q), live, T, rBase, aligned, bucketEntryTime[postId][side], wStart, wEnd
+        );
         return (q.bucketScaledTotal * newIx) / RAY;
     }
 
     /// @dev Settle the bucket in place (one epoch) via a single index rebase.
     ///      Returns minted/burned for the bucket slab. O(1).
-    function _settleBucket(SideQueue storage q, bool aligned, uint256 rBase)
-        internal
-        returns (uint256 minted, uint256 burned)
-    {
+    function _settleBucket(
+        uint256 postId,
+        uint8 side,
+        uint256 windowStart,
+        uint256 windowEnd,
+        SideQueue storage q,
+        bool aligned,
+        uint256 rBase
+    ) internal returns (uint256 minted, uint256 burned) {
         uint256 live = _bucketLive(q);
         if (q.bucketScaledTotal == 0 || live == 0 || rBase == 0) {
             return (0, 0);
@@ -1571,33 +1454,10 @@ contract StakeEngine is GovernedUpgradeable {
         if (T == 0) {
             return (0, 0);
         }
-        uint256 rankedTotal = T - live;
-        uint256 wPosB = rankedTotal + live / 2;
-        uint256 behind = wPosB < T ? T - wPosB : 0;
-        // Ray-math ordering: single multiply-first truncation, mirroring the
-        // ranked-lot delta = amount*rBase*midpointRate/(RAY*RAY). behind <= T so
-        // gRay <= rBase. patch_prC_rulings S-05: rBase is NOT bounded by RAY —
-        // rMax scales with epochsElapsed (annualized rate x elapsed window), so
-        // under dormancy rBase can exceed RAY (proven at deploy rates from ~530
-        // elapsed epochs, and far sooner at the 5e18 policy cap). The gRay>=RAY
-        // wipe branch below is therefore LIVE, not dead: it floors a losing
-        // bucket at total loss, which is the correct bound.
-        uint256 gRay = (rBase * behind) / T;
         uint256 ix = _bucketIndex(q);
-        uint256 newIx;
-        if (aligned) {
-            newIx = (ix * (RAY + gRay)) / RAY;
-        } else {
-            uint256 factor = gRay >= RAY ? 0 : RAY - gRay;
-            newIx = (ix * factor) / RAY;
-        }
-        // patch_prC_rulings S-01: floor at 1 wei. A fully-wiped bucket is
-        // dust-dead (live ~ scaled/RAY), exits still work (full-exit branch,
-        // no division hazard), and the stored value can never collide with
-        // the 0 == uninitialized state — the root cause of the resurrection.
-        if (newIx == 0) {
-            newIx = 1;
-        }
+        uint256 newIx = TimeWeighted.bucketIndexAfter(
+            ix, live, T, rBase, aligned, bucketEntryTime[postId][side], windowStart, windowEnd
+        );
         q.bucketIndexRay = newIx;
         uint256 newLive = (q.bucketScaledTotal * newIx) / RAY;
         if (newLive >= live) {
@@ -1782,8 +1642,11 @@ contract StakeEngine is GovernedUpgradeable {
     /// @dev ScoreEngine that supplies the effective pool at settlement (v17 §3.2). address(0) =
     ///      unwired (test harnesses): settlement uses direct totals, as v16 did.
     IScoreEngineV2 public scoreEngine;
+    /// @dev patch_settlement_snapshots (slot after scoreEngine — appended, never inserted) (review R3 F-B): the pooled tail bucket's amount-weighted entry
+    ///      time per (post, side), so bucket accrual is prorated by presence like a ranked lot (§3.2).
+    mapping(uint256 => uint256[2]) internal bucketEntryTime;
 
-    uint256[493] private __gap; // 495 -> 493 (observations, scoreEngine) patch_game_b // 499 -> 498 (postRegistry) -> 495 (posOffset, entryTime, settledTotal)
+    uint256[492] private __gap; // 493 -> 492 (bucketEntryTime) patch_settlement_snapshots // 495 -> 493 (observations, scoreEngine) patch_game_b // 499 -> 498 (postRegistry) -> 495 (posOffset, entryTime, settledTotal)
 }
 
 /// @dev Minimal read surface the engine needs from PostRegistry (H1).

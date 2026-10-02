@@ -387,6 +387,7 @@ contract WhitepaperConformanceTest is Test {
         uint256 l2 = registry.createLink(parent, child, false);
         _stake(A, l1, 0, 3e18); // share 3/4, link VS +1
         _stake(A, l2, 0, 1e18); // share 1/4
+        _seed3(parent, l1, l2); // v18: contributions are read from snapshots
         // contributions: -3*3/4 = -2.25 ; +3*1/4 = +0.75
         // pool: S = 2 + 0.75 = 2.75, C = 0 + 2.25 = 2.25 -> VS = 0.5/5 = +10%
         assertEq(score.effectiveVSRay(child), int256(RAY / 10), "(2.75 - 2.25) / 5 = +10%");
@@ -404,7 +405,9 @@ contract WhitepaperConformanceTest is Test {
             _stake(B, kids[i], 0, 2e18);
             uint256 l = registry.createLink(parent, kids[i], true);
             _stake(C, l, 0, 1e18);
+            score.seedSnapshot(l);
         }
+        score.seedSnapshot(parent);
         // each kid: S = 2, C = 6/3 = 2 -> 0%
         for (uint256 i = 0; i < 3; i++) {
             assertEq(score.effectiveVSRay(kids[i]), 0, "M/3 each");
@@ -412,6 +415,9 @@ contract WhitepaperConformanceTest is Test {
     }
 
     /// P27: a cycle contributes 0 along the closing path; the function stays defined
+    /// P27 (v18 §4.3): a cycle feeds back one epoch per hop, bounded, and converges; the function
+    /// stays defined. x and y challenge each other with equal mass: each reads 0 once both are seeded
+    /// (S = 2, C = 2), and settling across epochs keeps every score inside [-RAY, RAY] and settles down.
     function test_P27_CycleTerminatesAndZeroes() public {
         uint256 x = _claim("x");
         uint256 y = _claim("y");
@@ -421,9 +427,39 @@ contract WhitepaperConformanceTest is Test {
         uint256 ly = registry.createLink(y, x, true);
         _stake(C, lx, 0, 1e18);
         _stake(C, ly, 0, 1e18);
-        // VS(y): parent x is computed with y on the stack -> x's incoming from y = 0 -> x = +100%, mass 2
-        // y: S = 2, C = 2 -> 0. Symmetric for x.
+        _seed3(x, lx, ly);
+        score.seedSnapshot(y);
+        // y: S = 2, C = vs(x)·T(x)·1/1·1 = 2 -> 0. Symmetric for x.
         assertEq(score.effectiveVSRay(y), 0);
         assertEq(score.effectiveVSRay(x), 0);
+        // feedback over epochs is bounded, stays contested (≈0) and settles down (no amplification)
+        int256 prev = score.effectiveVSRay(y);
+        int256 prevStep = type(int256).max;
+        for (uint256 e = 0; e < 6; e++) {
+            _nextEpoch();
+            se.updatePost(x);
+            se.updatePost(y);
+            se.updatePost(lx);
+            se.updatePost(ly);
+            int256 cur = score.effectiveVSRay(y);
+            assertLe(_absI(cur), int256(RAY) / 100, "equal mutual challenge stays contested (|VS| < 1%)");
+            int256 step = _absI(cur - prev);
+            if (e > 1) {
+                assertLe(step, prevStep, "epoch-over-epoch change does not grow");
+            }
+            prevStep = step;
+            prev = cur;
+        }
+        assertEq(score.effectiveVSRay(x) > 0, score.effectiveVSRay(y) > 0, "no side wins a symmetric cycle");
+    }
+
+    function _seed3(uint256 a, uint256 b, uint256 c) internal {
+        score.seedSnapshot(a);
+        score.seedSnapshot(b);
+        score.seedSnapshot(c);
+    }
+
+    function _absI(int256 v) internal pure returns (int256) {
+        return v < 0 ? -v : v;
     }
 }

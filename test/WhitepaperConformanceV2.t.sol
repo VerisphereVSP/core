@@ -21,7 +21,17 @@ contract WhitepaperConformanceV2Test is WhitepaperConformanceTest {
 
     /// the settlement view: window average over the post's open window
     function _windowPool(uint256 pid) internal view returns (uint256 S, uint256 C, bool exact) {
-        return score.effectivePoolWindow(pid, se.getLastSnapshotEpoch(pid) * EPOCH, block.timestamp);
+        (S, C) = score.previewPoolWindow(pid, se.getLastSnapshotEpoch(pid) * EPOCH, block.timestamp);
+        exact = true; // v18: no walk, no memo flag
+    }
+
+    /// v18 §4.2.6: a child's contribution is read from its parent's and link's SNAPSHOTS. For
+    /// display-only assertions right after building a graph, seed them from the standing state (the
+    /// keeper's post-upgrade seed pass does exactly this); for settlement assertions, settle parents
+    /// and links before the child (keeper order).
+    function _seed(uint256 a, uint256 b) internal {
+        score.seedSnapshot(a);
+        score.seedSnapshot(b);
     }
 
     /// paper §4.2.3: effVS = (S - C) / (S + C)
@@ -77,10 +87,12 @@ contract WhitepaperConformanceV2Test is WhitepaperConformanceTest {
         _stake(A, c, 0, 2e18);
         uint256 p1 = _claim("p1");
         _stake(B, p1, 0, 1e18);
-        _link(C, p1, c, false, 1e18);
+        uint256 l1 = _link(C, p1, c, false, 1e18);
         uint256 p2 = _claim("p2");
         _stake(B, p2, 0, 1e18);
-        _link(C, p2, c, true, 1e18);
+        uint256 l2 = _link(C, p2, c, true, 1e18);
+        _seed(p1, l1);
+        _seed(p2, l2);
         (uint256 S, uint256 Cc, bool exact) = score.effectivePool(c);
         assertTrue(exact);
         assertEq(S, 3e18, "2 direct + 1 evidence for");
@@ -98,16 +110,18 @@ contract WhitepaperConformanceV2Test is WhitepaperConformanceTest {
         _stake(A, x, 0, 2e18);
         uint256 p = _claim("p");
         _stake(B, p, 0, 3e18);
-        _link(C, p, x, true, 1e18);
+        uint256 l = _link(C, p, x, true, 1e18);
         uint256 s0 = vsp.totalSupply();
         _nextEpoch();
-        se.updatePost(p); // parents first (keeper order): sMax = 3 + P's accrual
+        se.updatePost(p); // keeper order: parent, link, child — each writes its snapshot
+        se.updatePost(l);
         se.updatePost(x);
         // X: S = 2, C = 3 (P's time-weighted mass over the window = 3, present all window)
         uint256 rBase = _rBaseV2(2e18, 3e18, 2e18, se.settledTotal(p), 1);
         uint256 dA = _delta(2e18, rBase, 1e18, 2e18); // sole support lot: wp = 1, pw = 1/2
         assertEq(se.getUserStake(A, x, 0), 2e18 - dA, "supporter decays on evidence alone");
-        assertEq(vsp.totalSupply(), s0 + (se.settledTotal(p) - 3e18) - dA, "P's accrual minted; A's decay burned");
+        // supply: P's accrual minted, the link's accrual minted (uncontested 1 VSP), A's decay burned
+        assertEq(vsp.totalSupply(), s0 + (se.settledTotal(p) - 3e18) + (se.settledTotal(l) - 1e18) - dA, "mint - burn");
     }
 
     /// Direct stake and evidence give the same verity and aligned side (participation differs: direct T)
@@ -119,7 +133,8 @@ contract WhitepaperConformanceV2Test is WhitepaperConformanceTest {
         _stake(A, x2, 0, 2e18);
         uint256 p = _claim("p34");
         _stake(B, p, 0, 3e18);
-        _link(C, p, x2, true, 1e18);
+        uint256 l = _link(C, p, x2, true, 1e18);
+        _seed(p, l);
         (uint256 S1, uint256 C1,) = score.effectivePool(x1);
         (uint256 S2, uint256 C2,) = score.effectivePool(x2);
         assertEq(S1, S2);
@@ -127,6 +142,7 @@ contract WhitepaperConformanceV2Test is WhitepaperConformanceTest {
         assertEq(score.effectiveVSRay(x1), score.effectiveVSRay(x2), "same score");
         _nextEpoch();
         se.updatePost(p);
+        se.updatePost(l);
         se.updatePost(x1);
         se.updatePost(x2);
         // both supporters decay; x1 (T = 5) has larger participation than x2 (T = 2), so a larger delta
@@ -145,13 +161,17 @@ contract WhitepaperConformanceV2Test is WhitepaperConformanceTest {
         vm.warp(block.timestamp + EPOCH / 2);
         uint256 p = _claim("p35");
         _stake(B, p, 0, 3e18); // parent and link enter at mid-window
-        _link(C, p, x, true, 1e18);
+        uint256 l = _link(C, p, x, true, 1e18);
         vm.warp(block.timestamp + EPOCH / 2); // exactly at the boundary: window fully elapsed
+        se.updatePost(p); // the parent's own settlement records T_w = 1.5 (present half its window)
+        se.updatePost(l);
         (uint256 S, uint256 Cc,) = _windowPool(x);
         assertEq(S, 2e18);
         assertEq(Cc, 1.5e18, "3 VSP present for half the window = 1.5 VSP of mass");
-        assertEq(score.effectiveVSRay(x), _vs(2e18, 3e18), "instantaneous display: -20% (evidence now standing)");
-        se.updatePost(p);
+        // v18 §4.2.5: the displayed score = LIVE direct totals (projected, since x's window has passed)
+        // + the same snapshot contribution money will use
+        (uint256 Ax,) = se.getPostTotals(x);
+        assertEq(score.effectiveVSRay(x), _vs(Ax, 1.5e18), "display: live direct + snapshot evidence");
         se.updatePost(x);
         assertGt(se.getUserStake(A, x, 0), 2e18, "support side accrued (S > C)");
     }
@@ -163,28 +183,36 @@ contract WhitepaperConformanceV2Test is WhitepaperConformanceTest {
         vm.warp(block.timestamp + EPOCH - 1);
         uint256 p = _claim("p-flash");
         _stake(B, p, 0, 300e18); // huge, one second before the boundary
-        _link(C, p, x, true, 1e18);
+        uint256 l = _link(C, p, x, true, 1e18);
         vm.warp(block.timestamp + 1);
+        se.updatePost(p); // records T_w = 300/86400 for its window
+        se.updatePost(l);
         (, uint256 Cc,) = _windowPool(x);
         assertLt(Cc, 0.01e18, "300 VSP for 1 s of 86400 = 0.0035 VSP of mass");
-        se.updatePost(p);
         se.updatePost(x);
         assertGt(se.getUserStake(A, x, 0), 2e18, "supporter still accrues");
     }
 
-    /// §4.2.1 + cascade: a parent flipped this epoch withdraws its support from children this epoch
+    /// §4.2.1 + cascade (v18 D1): a parent flipped this epoch withdraws its support from its children
+    /// at the parent's next settlement — the same epoch under keeper order, parents first.
     function test_V2_P36_CascadeSameEpoch() public {
         uint256 r = _claim("root");
         _stake(A, r, 0, 3e18);
         uint256 k = _claim("kid");
         _stake(B, k, 0, 1e18);
-        _link(C, r, k, false, 1e18); // r supports k: k's S = 1 + 3 = 4
+        uint256 l = _link(C, r, k, false, 1e18); // r supports k: k's S = 1 + 3 = 4
+        _seed(r, l);
         (uint256 S0,,) = score.effectivePool(k);
         assertEq(S0, 4e18);
         _stake(B, r, 1, 5e18); // refute r at window start: r's effVS < 0 -> gate -> contributes 0
         vm.warp(block.timestamp + EPOCH);
-        (uint256 S1,,) = score.effectivePool(k);
-        assertEq(S1, 1e18, "discredited parent withdraws its support (no negation)");
+        se.updatePost(r); // keeper: parent first — its snapshot now carries vs < 0
+        se.updatePost(l);
+        (uint256 S1, uint256 C1,) = score.effectivePool(k);
+        (uint256 Ak,) = se.getPostTotals(k); // k's own direct total (projected: its window has passed)
+        assertEq(S1, Ak, "discredited parent withdraws its support (no negation)");
+        assertEq(C1, 0, "no negation");
+        assertLt(score.effectiveVSRay(r), 0);
     }
 
     /// §3.2 (v17): balanced pool -> no economic effect, even with direct majority
@@ -193,10 +221,11 @@ contract WhitepaperConformanceV2Test is WhitepaperConformanceTest {
         _stake(A, x, 0, 2e18); // direct +2
         uint256 p = _claim("pbal");
         _stake(B, p, 0, 2e18);
-        _link(C, p, x, true, 1e18); // evidence -2 => S = C = 2
+        uint256 l = _link(C, p, x, true, 1e18); // evidence -2 => S = C = 2
         uint256 s0 = vsp.totalSupply();
         _nextEpoch();
         se.updatePost(p);
+        se.updatePost(l);
         uint256 supplyAfterP = vsp.totalSupply();
         se.updatePost(x);
         assertEq(se.getUserStake(A, x, 0), 2e18, "no accrual, no decay on x");
@@ -212,10 +241,13 @@ contract WhitepaperConformanceV2Test is WhitepaperConformanceTest {
         uint256 k2 = _claim("k2");
         _stake(B, k1, 0, 1e18);
         _stake(B, k2, 0, 1e18);
-        _link(C, p, k1, true, 1e18); // present all window
+        uint256 l1 = _link(C, p, k1, true, 1e18); // present all window
         vm.warp(block.timestamp + EPOCH / 2);
-        _link(C, p, k2, true, 1e18); // present half the window: averaged stake 0.5
+        uint256 l2 = _link(C, p, k2, true, 1e18); // present half the window: averaged stake 0.5
         vm.warp(block.timestamp + EPOCH / 2);
+        se.updatePost(p); // keeper order: the parent and both links settle (each writes T_w into outSum)
+        se.updatePost(l1);
+        se.updatePost(l2);
         (, uint256 C1,) = _windowPool(k1);
         (, uint256 C2,) = _windowPool(k2);
         // shares: 1/(1+0.5) and 0.5/(1+0.5); mass 4 => 2.667 and 1.333
@@ -258,37 +290,76 @@ contract WhitepaperConformanceV2Test is WhitepaperConformanceTest {
         }
     }
 
-    /// A post whose ancestry is too large to settle within USER_SETTLE_GAS: stake() reverts
-    /// SettleFirst; updatePost() (keeper, unbounded) settles it; then stake() works. Settlement is
-    /// never skipped and never falls back to direct totals.
+    /// v18 §4.2.6: the user path defers to the keeper when a counted parent's snapshot is older than
+    /// the previous epoch (so nobody can settle a child against a deliberately stale parent); the
+    /// keeper path always completes. Settlement is never skipped and never falls back to direct totals.
     function test_V2_SettleFirst_DefersToKeeper() public {
-        uint256 root = _tree(2, 12); // 157 ancestors, > 3M gas cold with time-weighted reads
+        uint256 p = _claim("stale-parent");
+        _stake(A, p, 0, 3e18);
+        uint256 x = _claim("child-of-stale");
+        _stake(B, x, 0, 2e18);
+        uint256 l = _link(C, p, x, true, 1e18);
         _nextEpoch();
-        uint256 g0 = gasleft();
-        (,, bool exact) = score.effectivePoolWindow(root, se.getLastSnapshotEpoch(root) * EPOCH, block.timestamp);
-        uint256 walk = g0 - gasleft();
-        assertTrue(exact);
-        assertGt(walk, 3_000_000, "fixture must exceed the user budget (USER_SETTLE_GAS)");
+        se.updatePost(p);
+        se.updatePost(l);
+        se.updatePost(x); // epoch E1: everything current
+        _nextEpoch(); // E2: nobody settles p or l
+        _nextEpoch(); // E3: p's snapshot (E1) is older than the previous epoch (E2)
         vm.prank(C);
-        vm.expectRevert(abi.encodeWithSelector(StakeEngine.SettleFirst.selector, root));
-        se.stake(root, 0, 1e18);
-        se.updatePost(root); // keeper path: unbounded
-        assertEq(se.getLastSnapshotEpoch(root), block.timestamp / EPOCH, "settled by the keeper");
+        vm.expectRevert(abi.encodeWithSelector(StakeEngine.SettleFirst.selector, x));
+        se.stake(x, 0, 1e18);
+        se.updatePost(x); // keeper path completes on the newest snapshot available
+        assertEq(se.getLastSnapshotEpoch(x), block.timestamp / EPOCH, "settled by the keeper");
         vm.prank(C);
-        se.stake(root, 0, 1e18); // now inline settlement is a no-op and the stake succeeds
-        assertEq(se.getUserStake(C, root, 0), 1e18);
+        se.stake(x, 0, 1e18); // inline settlement is now a no-op and the stake succeeds
+        assertEq(se.getUserStake(C, x, 0), 1e18);
     }
 
-    /// Gas record for the design note: cost per ancestor with time-weighted reads.
-    function test_V2_GasPerAncestor() public {
-        uint256 root = _tree(2, 4); // 21 nodes
+    /// v18: a brand-new claim with incoming links defers its FIRST user-path settlement until the
+    /// keeper has written its snapshot (NotSeeded -> SettleFirst); updatePost clears it.
+    function test_V2_SettleFirst_UnseededClaimDefersOnce() public {
+        uint256 p = _claim("p-new");
+        _stake(A, p, 0, 3e18);
+        uint256 x = _claim("x-new");
+        _stake(B, x, 0, 2e18);
+        _link(C, p, x, false, 1e18);
         _nextEpoch();
+        vm.prank(C);
+        vm.expectRevert(abi.encodeWithSelector(StakeEngine.SettleFirst.selector, x));
+        se.stake(x, 0, 1e18);
+        se.updatePost(x);
+        vm.prank(C);
+        se.stake(x, 0, 1e18);
+        assertEq(se.getUserStake(C, x, 0), 1e18);
+    }
+
+    /// v18 F-D: settlement cost does not depend on the ancestry. A root with 21 ancestors settles for
+    /// about the same gas as a claim with one parent; the per-ancestor walk is gone.
+    function test_V2_GasPerAncestor() public {
+        uint256 root = _tree(2, 4); // 21 nodes above the root
+        uint256 lone = _claim("lone");
+        _stake(A, lone, 0, 2e18);
+        uint256 lp = _claim("lone-parent");
+        _stake(A, lp, 0, 2e18);
+        _link(B, lp, lone, true, 1e18);
+        _nextEpoch();
+        // seed everything above the root so its settlement reads full snapshots
+        uint256 next = registry.nextPostId();
+        for (uint256 i = 1; i < next; i++) {
+            if (i != root && i != lone) {
+                se.updatePost(i);
+            }
+        }
         uint256 g0 = gasleft();
-        score.effectivePoolWindow(root, se.getLastSnapshotEpoch(root) * EPOCH, block.timestamp);
-        uint256 used = g0 - gasleft();
-        emit log_named_uint("walk gas, 21 ancestors, time-weighted", used);
-        emit log_named_uint("per ancestor", used / 21);
-        assertLt(used / 21, 120_000, "per-ancestor cost sanity bound");
+        se.updatePost(root);
+        uint256 deep = g0 - gasleft();
+        g0 = gasleft();
+        se.updatePost(lone);
+        uint256 shallow = g0 - gasleft();
+        emit log_named_uint("settle gas, 4 direct parents (21 ancestors)", deep);
+        emit log_named_uint("settle gas, 1 parent", shallow);
+        assertLt(deep, shallow * 3, "cost scales with incoming count, not ancestry");
+        assertLt(deep, 1_500_000, "absolute sanity bound");
     }
 
     // ═══════════════ invariants under evidence settlement ═══════════════
@@ -325,10 +396,10 @@ contract WhitepaperConformanceV2Test is WhitepaperConformanceTest {
         uint256 linkLotsBefore = _allLinkLots();
         for (uint256 e = 0; e < 3; e++) {
             _nextEpoch();
+            _settleAllLinks(); // keeper order: links carry last epoch's parent snapshots; then claims parents-first
             for (uint256 i = 0; i < nClaims; i++) {
                 se.updatePost(ids[i]); // topological: parents (j < i) first
             }
-            _settleAllLinks();
         }
         uint256 lotsAfter;
         for (uint256 i = 0; i < nClaims; i++) {

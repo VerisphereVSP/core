@@ -189,6 +189,8 @@ contract SecurityRegression is Test {
         uint256 honestLink = registry.createLink(honestParent, target, false);
         vm.prank(honest);
         eng.stake(honestLink, 0, 200e18);
+        score.seedSnapshot(honestParent); // v18: snapshots
+        score.seedSnapshot(honestLink);
         int256 before = score.effectiveVSRay(target);
         // flood: two parents left UNSTAKED (inactive), links out-staking the honest one
         _fund(attacker, 10_000e18);
@@ -197,6 +199,8 @@ contract SecurityRegression is Test {
             uint256 fl = registry.createLink(fp, target, false);
             vm.prank(attacker);
             eng.stake(fl, 0, 300e18);
+            score.seedSnapshot(fp); // inactive parent: snapshot vs = 0 -> key 0
+            score.seedSnapshot(fl);
         }
         int256 after_ = score.effectiveVSRay(target);
         assertEq(after_, before, "R2-H: zero-contribution flood links no longer occupy bounded slots");

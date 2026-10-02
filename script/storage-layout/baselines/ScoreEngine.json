@@ -1,9 +1,9 @@
 {
   "_meta": {
     "contract": "src/ScoreEngine.sol:ScoreEngine",
-    "forge_version": "forge Version: 1.5.1-stable",
-    "generated_at": "2026-08-30T16:23:27Z",
-    "layout_sha256": "deda713e12c0c8a08cfc234c2bebb20bcd9ad628aa4420c5ccbb429e1e124c88",
+    "forge_version": "forge Version: 1.5.1-v1.5.1",
+    "generated_at": "2026-10-02T08:58:47Z",
+    "layout_sha256": "70739f1c3c6aaecca0fc66b0f271cb287b11f37077e8026706112538c5d53a84",
     "note": "Storage-layout regression baseline. Regenerate ONLY for an intended, reviewed, upgrade-safe layout change via check.sh --update.",
     "schema": 2
   },
@@ -70,10 +70,46 @@
         "type": "t_uint256"
       },
       {
-        "label": "__gap",
+        "label": "snaps",
         "offset": 0,
         "slot": 109,
-        "type": "t_array(t_uint256)500_storage"
+        "type": "t_mapping(t_uint256,t_struct(Snapshot)_storage)"
+      },
+      {
+        "label": "outSum",
+        "offset": 0,
+        "slot": 110,
+        "type": "t_mapping(t_uint256,t_uint256)"
+      },
+      {
+        "label": "outContrib",
+        "offset": 0,
+        "slot": 111,
+        "type": "t_mapping(t_uint256,t_uint96)"
+      },
+      {
+        "label": "pools",
+        "offset": 0,
+        "slot": 112,
+        "type": "t_mapping(t_uint256,t_struct(Pool)_storage)"
+      },
+      {
+        "label": "counted",
+        "offset": 0,
+        "slot": 113,
+        "type": "t_mapping(t_uint256,t_struct(Counted)_storage)"
+      },
+      {
+        "label": "linkBetween",
+        "offset": 0,
+        "slot": 114,
+        "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_array(t_uint256)2_storage))"
+      },
+      {
+        "label": "__gap",
+        "offset": 0,
+        "slot": 115,
+        "type": "t_array(t_uint256)494_storage"
       }
     ],
     "types": {
@@ -86,10 +122,15 @@
         "encoding": "inplace",
         "numberOfBytes": "3200"
       },
-      "t_array(t_uint256)500_storage": {
+      "t_array(t_uint256)2_storage": {
         "base": "t_uint256",
         "encoding": "inplace",
-        "numberOfBytes": "16000"
+        "numberOfBytes": "64"
+      },
+      "t_array(t_uint256)494_storage": {
+        "base": "t_uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "15808"
       },
       "t_contract(IProtocolPolicy)": {
         "encoding": "inplace",
@@ -107,9 +148,127 @@
         "encoding": "inplace",
         "numberOfBytes": "20"
       },
+      "t_int128": {
+        "encoding": "inplace",
+        "numberOfBytes": "16"
+      },
+      "t_int96": {
+        "encoding": "inplace",
+        "numberOfBytes": "12"
+      },
+      "t_mapping(t_uint256,t_array(t_uint256)2_storage)": {
+        "encoding": "mapping",
+        "key": "t_uint256",
+        "numberOfBytes": "32",
+        "value": "t_array(t_uint256)2_storage"
+      },
+      "t_mapping(t_uint256,t_mapping(t_uint256,t_array(t_uint256)2_storage))": {
+        "encoding": "mapping",
+        "key": "t_uint256",
+        "numberOfBytes": "32",
+        "value": "t_mapping(t_uint256,t_array(t_uint256)2_storage)"
+      },
+      "t_mapping(t_uint256,t_struct(Counted)_storage)": {
+        "encoding": "mapping",
+        "key": "t_uint256",
+        "numberOfBytes": "32",
+        "value": "t_struct(Counted)_storage"
+      },
+      "t_mapping(t_uint256,t_struct(Pool)_storage)": {
+        "encoding": "mapping",
+        "key": "t_uint256",
+        "numberOfBytes": "32",
+        "value": "t_struct(Pool)_storage"
+      },
+      "t_mapping(t_uint256,t_struct(Snapshot)_storage)": {
+        "encoding": "mapping",
+        "key": "t_uint256",
+        "numberOfBytes": "32",
+        "value": "t_struct(Snapshot)_storage"
+      },
+      "t_mapping(t_uint256,t_uint256)": {
+        "encoding": "mapping",
+        "key": "t_uint256",
+        "numberOfBytes": "32",
+        "value": "t_uint256"
+      },
+      "t_mapping(t_uint256,t_uint96)": {
+        "encoding": "mapping",
+        "key": "t_uint256",
+        "numberOfBytes": "32",
+        "value": "t_uint96"
+      },
+      "t_struct(Counted)_storage": {
+        "encoding": "inplace",
+        "members": [
+          {
+            "label": "c",
+            "offset": 0,
+            "slot": 0,
+            "type": "t_int96"
+          },
+          {
+            "label": "epoch1",
+            "offset": 12,
+            "slot": 0,
+            "type": "t_uint32"
+          }
+        ],
+        "numberOfBytes": "32"
+      },
+      "t_struct(Pool)_storage": {
+        "encoding": "inplace",
+        "members": [
+          {
+            "label": "S",
+            "offset": 0,
+            "slot": 0,
+            "type": "t_uint96"
+          },
+          {
+            "label": "C",
+            "offset": 12,
+            "slot": 0,
+            "type": "t_uint96"
+          }
+        ],
+        "numberOfBytes": "32"
+      },
+      "t_struct(Snapshot)_storage": {
+        "encoding": "inplace",
+        "members": [
+          {
+            "label": "epoch1",
+            "offset": 0,
+            "slot": 0,
+            "type": "t_uint32"
+          },
+          {
+            "label": "T",
+            "offset": 4,
+            "slot": 0,
+            "type": "t_uint96"
+          },
+          {
+            "label": "vs",
+            "offset": 16,
+            "slot": 0,
+            "type": "t_int128"
+          }
+        ],
+        "numberOfBytes": "32"
+      },
       "t_uint256": {
         "encoding": "inplace",
         "numberOfBytes": "32"
+      },
+      "t_uint32": {
+        "encoding": "inplace",
+        "numberOfBytes": "4"
+      },
+      "t_uint96": {
+        "encoding": "inplace",
+        "numberOfBytes": "12"
       }
     }
   }
