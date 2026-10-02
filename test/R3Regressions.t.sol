@@ -87,4 +87,47 @@ contract R3RegressionsTest is SnapshotBase {
         uint256 afterGain = se.getUserStake(A, victim, 0) - v1;
         assertApproxEqRel(afterGain, cleanGain, 2e16, "no suppression after the ghost leaves (was 10,000x)");
     }
+
+    // ── re-check 2026-10-02 (patch_settlement_caps) ──────────────────────────────────────────────
+
+    /// A seed is governance-only, so nobody can plant a post's first snapshot at a transient level.
+    function test_seedSnapshotIsGovernanceOnly() public {
+        uint256 p = _claimStaked("seed-g", A, 0, 5e18);
+        vm.prank(B);
+        vm.expectRevert();
+        score.seedSnapshot(p);
+        (bool seeded,,,) = score.getSnapshot(p);
+        assertFalse(seeded, "a non-governance caller cannot seed");
+        score.seedSnapshot(p); // governance (this test contract)
+        (seeded,,,) = score.getSnapshot(p);
+        assertTrue(seeded);
+    }
+
+    /// Even a governance seed written at a transient stake level stands only until the post's next
+    /// settlement, which overwrites it with the window average.
+    function test_seedAtTransientLevelIsOverwrittenAtNextSettle() public {
+        uint256 p = _claimStaked("seed-t", A, 0, 1e18);
+        _stake(B, p, 0, 1_000e18); // transient: present only for the seed
+        score.seedSnapshot(p);
+        assertEq(_snapT(p), 1_001e18, "seed reads live totals");
+        _withdraw(B, p, 0, 1_000e18);
+        assertEq(_snapT(p), 1_001e18, "the seed stands until a settlement");
+        _nextEpoch();
+        se.updatePost(p);
+        uint256 T = _snapT(p);
+        assertLt(T, 2e18, "next settlement overwrote the seed with the window average (the flash is gone)");
+        assertGt(T, 0);
+    }
+
+    /// The absolute ceiling is the measured point: governance cannot raise the caps above it.
+    function test_linkCapCeilingIs1000() public {
+        assertEq(graph.ABSOLUTE_MAX_LINKS_PER_CLAIM(), 1000);
+        vm.expectRevert(LinkGraph.InvalidLinkCap.selector);
+        graph.setLinkCaps(1001, 1000);
+        vm.expectRevert(LinkGraph.InvalidLinkCap.selector);
+        graph.setLinkCaps(1000, 1001);
+        graph.setLinkCaps(1000, 1000);
+        graph.setLinkCaps(64, 64);
+        assertEq(graph.maxIncomingLinksPerClaim(), 64);
+    }
 }

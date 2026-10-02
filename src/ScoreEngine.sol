@@ -163,10 +163,15 @@ contract ScoreEngine is GovernedUpgradeable {
         (S, C) = _writeSnapshot(postId, A, D, epoch, strict);
     }
 
-    /// @notice Seed a post's first snapshot from its standing (live) state. Permissionless, per-post,
-    ///         idempotent: a no-op once the post has any snapshot. Run in topological order after the
-    ///         upgrade (claims, then links, then the claims they point to) so parents are seeded first.
-    function seedSnapshot(uint256 postId) external {
+    /// @notice Seed a post's first snapshot from its standing (live) state. Governance only (the one-time
+    ///         pass after the upgrade, run in topological order: claims, then links, then the claims they
+    ///         point to), per-post, idempotent: a no-op once the post has any snapshot. Every settlement
+    ///         overwrites the record with window-averaged values, so a seed stands at most until the post's
+    ///         next settlement. patch_settlement_caps (review R3 re-check): seeding was permissionless and
+    ///         reads live totals, so a third party could have planted a post's first snapshot at a transient
+    ///         stake level between its creation and its first settlement; a post nobody seeds simply gets
+    ///         its first snapshot at its first settlement (keeper path), which is time-weighted.
+    function seedSnapshot(uint256 postId) external onlyGovernance {
         if (snaps[postId].epoch1 != 0) {
             return;
         }
