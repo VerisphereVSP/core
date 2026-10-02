@@ -44,7 +44,12 @@ contract LinkGraph is GovernedUpgradeable {
     ///         the live caps are governance-settable via setLinkCaps; 0 in storage means "default".
     uint256 public constant MAX_OUTGOING_LINKS_PER_CLAIM = 1000; // bundle05_c default
     uint256 public constant MAX_INCOMING_LINKS_PER_CLAIM = 1000; // bundle05_c default
-    uint256 public constant ABSOLUTE_MAX_LINKS_PER_CLAIM = 2000; // v18: settlement at 1000 incoming fits a 32M block with margin
+    /// @dev patch_settlement_caps (review R3 re-check, 2026-10-02): the ceiling governance may raise the caps
+    ///      to. Hub settlement is linear in incoming links; measured COLD (forge test --isolate, one tx per
+    ///      call) a hub with 1,000 active incoming links settles for ~22.7M gas = 71% of a Fuji block (32M),
+    ///      28% of mainnet's (80M). 2,000 would extrapolate to ~45M and not fit Fuji; and edges above a
+    ///      lowered cap are grandfathered, so the ceiling must fit cold with margin on the smaller chain.
+    uint256 public constant ABSOLUTE_MAX_LINKS_PER_CLAIM = 1000;
 
     // Duplicate edge detection: keccak256(from, to, isChallenge) => true
     mapping(bytes32 => bool) private edgeExists;

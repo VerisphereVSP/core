@@ -47,3 +47,7 @@ jobs:
 
       - name: Run Forge tests
         run: forge test -vvv
+
+      # patch_settlement_caps: the F-D gas gates are calibrated cold (one tx per call); run them that way too
+      - name: F-D flood gates, cold (--isolate)
+        run: forge test --isolate --match-contract SnapshotFlood -vv
