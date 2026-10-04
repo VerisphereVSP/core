@@ -374,6 +374,89 @@ contract WhitepaperConformanceV3Test is SnapshotBase {
     function _observationsSlot() internal pure returns (uint256) {
         return 138; // StakeEngine storage layout (script/storage-layout/baselines): observations @ slot 138
     }
+
+    // ── patch_presence_bar (Fuji soak S2, 2026-10-04) ───────────────────────────────────────────
+    // Activity (the minTotalStake gate, §4.2.1) is judged on the SAME window-averaged stake as every
+    // other quantity: a post counts in a window only if stake × (fraction of the window it stood) clears
+    // the threshold — one VSP-window of presence at the deployed threshold. The soak showed the
+    // consequence at the minimum stake (a 1-VSP link placed mid-window counted from its second window);
+    // the reason the rule is right is P59: without it a link staked for the last minutes of a window
+    // would transmit its parent's full mass for the whole window at no capital risk, every day.
+
+    /// P58: the bar is one VSP-window of presence — 1 VSP placed mid-window misses it, 2 VSP clears it,
+    /// and the 1-VSP link counts from its first FULL window. (Two parents, so each link is alone on its
+    /// parent's outgoing sum; vm.getBlockTimestamp because via-IR folds repeated block.timestamp reads.)
+    function test_P58_PresenceBarAtTheMinimumStake() public {
+        policy.setMinTotalStake(1e18); // Fuji/mainnet-like threshold
+        uint256 p1 = _claimStaked("p58-parent1", A, 0, 5e18);
+        uint256 p2 = _claimStaked("p58-parent2", A, 0, 5e18);
+        uint256 x1 = _claimStaked("p58-x1", B, 0, 20e18);
+        uint256 x2 = _claimStaked("p58-x2", B, 0, 20e18);
+        _nextEpoch();
+        _keeperPass();
+        vm.warp(vm.getBlockTimestamp() + EPOCH / 2); // mid-window
+        uint256 l1 = _link(C, p1, x1, true, 1e18); // the minimum
+        uint256 l2 = _link(C, p2, x2, true, 2e18); // twice the minimum
+        vm.warp(vm.getBlockTimestamp() + EPOCH / 2); // the boundary
+        // keeper order: parents, links, then the children (a post settles once per epoch, so order matters)
+        se.updatePost(p1);
+        se.updatePost(p2);
+        se.updatePost(l1);
+        se.updatePost(l2);
+        se.updatePost(x1);
+        se.updatePost(x2);
+        (,, uint96 t1, int128 v1) = score.getSnapshot(l1);
+        (,, uint96 t2, int128 v2) = score.getSnapshot(l2);
+        assertApproxEqRel(uint256(t1), 0.5e18, 2e16, "1 VSP for half a window = 0.5 VSP-windows");
+        assertEq(int256(v1), 0, "below the bar: inactive for this window");
+        assertApproxEqRel(uint256(t2), 1e18, 2e16, "2 VSP for half a window = 1 VSP-window");
+        assertEq(int256(v2), int256(RAY), "at the bar: active");
+        (, uint256 c1) = score.getSettledPool(x1);
+        (, uint256 c2) = score.getSettledPool(x2);
+        assertEq(c1, 0, "minimum link placed mid-window: nothing on its first (partial) window");
+        assertApproxEqRel(c2, 5e18, 1e16, "2-VSP link placed mid-window: the parent's mass on day one");
+        // the next window is the 1-VSP link's first full one: it counts from here on
+        _nextEpoch();
+        se.updatePost(p1);
+        se.updatePost(l1);
+        se.updatePost(x1);
+        (, uint256 c1b) = score.getSettledPool(x1);
+        assertApproxEqRel(c1b, 5e18, 1e16, "and from its first full window");
+    }
+
+    /// P59: why the bar is time-weighted — a link staked for the last minutes of a window cannot
+    /// transmit its parent's mass for that window (no free one-window challenges, repeatable daily).
+    function test_P59_LastMinuteLinkTransmitsNothing() public {
+        policy.setMinTotalStake(1e18);
+        uint256 p = _claimStaked("p59-parent", A, 0, 50e18);
+        uint256 x = _claimStaked("p59-x", B, 0, 20e18);
+        uint256 l = _link(C, p, x, true, 1e18);
+        _withdraw(C, l, 0, 1e18); // start the experiment with the link empty
+        _nextEpoch();
+        _keeperPass();
+        for (uint256 day = 0; day < 3; day++) {
+            vm.warp(vm.getBlockTimestamp() + EPOCH - 120);
+            _stake(C, l, 0, 1e18); // two minutes before the boundary
+            vm.warp(vm.getBlockTimestamp() + 120);
+            se.updatePost(p);
+            se.updatePost(l);
+            (,, uint96 lT, int128 lVs) = score.getSnapshot(l);
+            assertLt(uint256(lT), 0.01e18, "two minutes of 1 VSP is ~0.0014 VSP-windows");
+            assertEq(int256(lVs), 0, "inactive");
+            se.updatePost(x);
+            (, uint256 c) = score.getSettledPool(x);
+            assertEq(c, 0, "the 50-VSP parent's mass does not reach x through a last-minute link");
+            _withdraw(C, l, 0, se.getUserStake(C, l, 0)); // and out again
+        }
+        // the same link, held for a full window, counts — presence is what the bar measures
+        _stake(C, l, 0, 1e18);
+        _nextEpoch();
+        se.updatePost(p);
+        se.updatePost(l);
+        se.updatePost(x);
+        (, uint256 cFull) = score.getSettledPool(x);
+        assertApproxEqRel(cFull, 50e18, 1e16, "held a full window: counted");
+    }
 }
 
 contract Fits96Harness {
