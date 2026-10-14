@@ -9,8 +9,11 @@ import "./base/SnapshotBase.sol";
 contract R3RegressionsTest is SnapshotBase {
     /// C-1 (Medium): a sibling link withdrawn to below the fee just before settlement used to vanish
     /// from the outgoing denominator while the survivors kept their full time-weighted mass, so the
-    /// survivor's share inflated (walk said 12 where the honest answer was ~7). v18: the denominator
-    /// is the sum of the links' own settled window averages — one clock.
+    /// survivor's share inflated (walk said 12 where the honest answer was ~7). v18: one clock — the
+    /// denominator is the sum of the links' own settled totals. VSP-SEC-004 (patch_sec004_present_pool)
+    /// moved that clock from the window AVERAGE to the capital PRESENT at settlement: the withdrawn link
+    /// bore no settlement, so it has no mass for that window, and the survivor's share is exactly the
+    /// settled arithmetic (now the whole parent mass) — consistent, not inflated by a stale average.
     function test_C1_outgoingDenominatorUsesSettledClock() public {
         uint256 p = _claimStaked("p", A, 0, 12e18);
         uint256 x1 = _claimStaked("x1", B, 0, 1e18);
@@ -24,20 +27,25 @@ contract R3RegressionsTest is SnapshotBase {
         vm.warp(block.timestamp + 60);
         se.updatePost(p);
         se.updatePost(l1);
-        se.updatePost(l2); // l2's T_w over this window ~ 10 x (86340/86400)
+        se.updatePost(l2);
         uint256 t1 = _snapT(l1);
         uint256 t2 = _snapT(l2);
-        assertGt(t2, 9.9e18, "the withdrawn link stood almost the whole window");
+        assertEq(t2, 0, "SEC-004: a link that left before settlement has no mass for that window");
+        assertGt(t1, 9.9e18, "the link that stayed has its full mass");
         (uint256 S1,,) = score.effectivePool(x1);
         (uint256 Ax1,) = se.getPostTotals(x1);
         uint256 share1 = S1 - Ax1;
-        assertEq(share1, Math.mulDiv(_snapT(p), t1, t1 + t2), "x1 gets exactly its settled share");
-        assertLt(share1, 6.5e18, "not the whole parent mass (the old walk gave 12)");
+        assertEq(share1, Math.mulDiv(_snapT(p), t1, t1 + t2), "x1 gets exactly its settled share (one clock)");
+        (uint256 S2,,) = score.effectivePool(x2);
+        (uint256 Ax2,) = se.getPostTotals(x2);
+        assertEq(S2 - Ax2, 0, "x2's evidence left with its stake");
     }
 
     /// C-3 (Low): an incoming challenge link withdrawn to live zero just before settlement used to lose
-    /// its ranking slot and the target read unchallenged for a window it was challenged in. v18: the
-    /// link's settled window average is what counts, for that window.
+    /// its ranking slot and the target read unchallenged for a window it was challenged in. v18 made
+    /// the window average count. VSP-SEC-004: the average let capital that bears no settlement decide
+    /// one, so the rule is now presence at settlement — the emptied link counts for nothing in the
+    /// window it left, and the target's supporter is not decayed by a challenge that took no risk.
     function test_C3_incomingRankUsesSettledClock() public {
         score.setEdgeLimits(1, 64);
         uint256 x = _claimStaked("x", A, 0, 2e18);
@@ -52,14 +60,14 @@ contract R3RegressionsTest is SnapshotBase {
         se.updatePost(p);
         se.updatePost(l);
         (, uint256 Cw) = score.previewPoolWindow(x, se.getLastSnapshotEpoch(x) * EPOCH, block.timestamp);
-        assertGt(Cw, 49e18, "the window x is settling was challenged ~all along: it settles challenged");
+        assertEq(Cw, 0, "SEC-004: the challenge left before settlement, so it bears nothing and decides nothing");
         se.updatePost(x);
-        assertLt(se.getUserStake(A, x, 0), atE1, "x's supporter decayed for that window");
-        // and from the NEXT window the empty link counts for nothing
+        assertGe(se.getUserStake(A, x, 0), atE1, "x's supporter is not decayed by a challenge that took no risk");
+        // and from the next window the empty link still counts for nothing
         _nextEpoch();
         _keeperPass();
         (, uint256 Cn,) = score.effectivePool(x);
-        assertEq(Cn, 0, "an emptied link contributes nothing once its empty window has settled");
+        assertEq(Cn, 0, "an emptied link contributes nothing");
     }
 
     /// C-4 (Medium): a 1,000,000-VSP transient leader that settled once and withdrew used to pin sMax
