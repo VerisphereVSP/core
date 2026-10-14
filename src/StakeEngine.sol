@@ -1399,8 +1399,17 @@ contract StakeEngine is GovernedUpgradeable {
         uint256 idx = _getLotIndex(ps, user, side);
         if (idx != 0) {
             StakeLot storage lot = q.lots[idx - 1];
-            removed = amount > lot.amount ? lot.amount : amount;
-            lot.amount -= removed;
+            uint256 before = lot.amount;
+            removed = amount > before ? before : amount;
+            lot.amount = before - removed;
+            // VSP-SEC-003 (patch_sec003_posoffset_scale): ruling 1c says the offset scales with the
+            // remaining amount on partial withdraw; it never did, so a top-up + partial withdraw left a
+            // small lot parked at the tail with the big lot's offset (near-zero loss weight, full totals).
+            unchecked {
+                // off <= side total and amounts are bounded by MAX_STAKE_AMOUNT: the product cannot overflow;
+                // before > 0 because amount <= _userAmount and amount != 0.
+                posOffset[postId][side][user] = (posOffset[postId][side][user] * lot.amount) / before;
+            }
         } else {
             removed = _bucketRemove(ps, q, side, user, amount);
         }
