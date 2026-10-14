@@ -106,6 +106,20 @@ Goal:
 - The withdraw path calls `_maybeSnapshot` first, which forces a snapshot if the snapshot period has elapsed. The user thus realizes their losses up to the most recent snapshot before being able to withdraw what remains.
 - Between snapshots, view-projected balances are smaller for losing positions, but the actual withdrawable amount is the *stored* lot amount; this is conservative for the protocol (the user can withdraw projected losses they have not yet realized, but they also forfeit any further potential growth).
 
+### D.3 Transient stake that decides a settlement it does not bear (VSP-SEC-004)
+**Attack**
+- Stake heavily at the start of a window, withdraw before it closes. D.2 lets the leaver keep its unrealised loss; until 2026-10-14 the settlement pool was also the window *average* of the side totals, so the departed stake still chose the winner and set the rate for everyone who stayed, at no risk to itself (reported with PoCs: 36x amplification on a near-balanced post; winner flipped against the majority present).
+
+**Mitigation**
+- Ruling 2026-10-14 (option A): the pool a settlement pays on is the capital **present at settlement**, each lot prorated by its presence in the window — the same rule `TimeWeighted.lotDelta` applies to the payout — so the set that decides and the set that bears are one set. Withdrawals stay immediate. Flash stake still counts only for the seconds it stood. Regression: `test/SEC004_PresentPool.t.sol`.
+
+### D.4 Stale position offset after a partial withdraw (VSP-SEC-003)
+**Attack**
+- Top up a ranked lot (its offset blends toward the tail), withdraw the top-up in the same epoch: the small remaining lot kept the large lot's offset — position weight 0.015 instead of 0.995 — and burned 1.5 % of what an identical lot burned on every losing settlement, while counting in full in the side totals and the score.
+
+**Mitigation**
+- `_decreaseUser` scales `posOffset` with the remaining amount (ruling 1c's stated rule, previously unimplemented); a full exit clears it. Regression: `test/SEC003_PosOffsetScale.t.sol`.
+
 ---
 
 ## E. Authority / Token Role Misconfiguration

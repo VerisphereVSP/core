@@ -477,21 +477,48 @@ contract StakeEngine is GovernedUpgradeable {
         return posts[postId].lastSnapshotEpoch;
     }
 
-    /// @notice patch_game_b (v17 §4.2.5): direct side totals time-weighted over [t0, t1].
-    ///         t1 <= t0, or a post with no observations yet, returns the live totals.
+    /// @notice VSP-SEC-004 (patch_sec004_present_pool): the direct side totals a settlement over [t0, t1)
+    ///         pays on — the capital PRESENT at t1, each lot prorated by the share of the window it was
+    ///         there for (the same presence rule TimeWeighted.lotDelta applies to its payout). Capital that
+    ///         left before t1 bears no settlement, so it has no say in it; capital that arrived late counts
+    ///         for its time. Until this patch the totals were the window AVERAGE of every observation, so
+    ///         a stake present for half the window and withdrawn before settlement still decided the
+    ///         winner and the rate for everyone who stayed (reported 2026-10-14). The observation log is
+    ///         no longer written or read; its storage slot is kept for layout. t1 <= t0 returns the live
+    ///         totals (the governance seed path). Name kept so the ScoreEngine ABI is unchanged.
     function getTimeWeightedTotals(uint256 postId, uint256 t0, uint256 t1)
         external
         view
         returns (uint256 support, uint256 challenge)
     {
         PostState storage ps = posts[postId];
-        return observations[postId].totals(t0, t1, ps.sides[0].total, ps.sides[1].total);
+        if (t1 <= t0) {
+            return (ps.sides[0].total, ps.sides[1].total);
+        }
+        support = _presentTotal(postId, 0, t0, t1);
+        challenge = _presentTotal(postId, 1, t0, t1);
     }
 
-    /// @dev Record the current totals. Called after every change to a side total.
-    function _observe(uint256 postId) internal {
-        PostState storage ps = posts[postId];
-        observations[postId].observe(ps.sides[0].total, ps.sides[1].total);
+    /// @dev Σ ranked lot amount × presence + bucket live × presence over [t0, t1).
+    function _presentTotal(uint256 postId, uint8 side, uint256 t0, uint256 t1) internal view returns (uint256 sum) {
+        SideQueue storage q = posts[postId].sides[side];
+        uint256 n = q.lots.length;
+        for (uint256 i = 0; i < n; i++) {
+            sum += _present(q.lots[i].amount, entryTime[postId][side][q.lots[i].staker], t0, t1);
+        }
+        sum += _present(_bucketLive(q), bucketEntryTime[postId][side], t0, t1);
+    }
+
+    /// @dev amount × clamp((t1 - et) / (t1 - t0), 0, 1); et == 0 or et <= t0 means the whole window
+    ///      (mirrors TimeWeighted.lotDelta).
+    function _present(uint256 amount, uint256 et, uint256 t0, uint256 t1) internal pure returns (uint256) {
+        if (et <= t0) {
+            return amount;
+        }
+        if (et >= t1) {
+            return 0;
+        }
+        return (amount * (t1 - et)) / (t1 - t0);
     }
 
     /// @dev User path: settle inline within USER_SETTLE_GAS or defer to the keeper.
@@ -767,16 +794,6 @@ contract StakeEngine is GovernedUpgradeable {
             ps.lastSnapshotEpoch = currentEpoch;
             return;
         }
-        // patch_settlement_snapshots (review R3 N-1): a legacy post (no observations yet) gets its
-        // window-start observation BEFORE any mutation can write a later one, so standing stake
-        // counts for the whole window it stood.
-        if (observations[postId].length == 0) {
-            uint256 a_ = ps.sides[0].total;
-            uint256 d_ = ps.sides[1].total;
-            if (a_ + d_ != 0) {
-                observations[postId].seed(lastEpoch * EPOCH_LENGTH, a_, d_);
-            }
-        }
         uint256 periodInEpochs = snapshotPeriod / EPOCH_LENGTH;
         if (periodInEpochs == 0) {
             periodInEpochs = 1;
@@ -810,11 +827,6 @@ contract StakeEngine is GovernedUpgradeable {
         settledTotal[postId] = T;
         _updateSMax(postId, T);
 
-        // patch_game_b: legacy posts (pre-upgrade) get their first observation at the window
-        // start with the pre-settlement totals, so standing stake counts for this window.
-        if (T != 0) {
-            observations[postId].seed(lastEpoch * EPOCH_LENGTH, A, D);
-        }
         // patch_settlement_snapshots (whitepaper v18 §3.2/§4.2.6): truth pressure and the accruing
         // side come from the effective pool over this window, assembled by the ScoreEngine from this
         // post's window-averaged direct totals and its parents'/links' SNAPSHOTS (no recursion);
@@ -832,7 +844,6 @@ contract StakeEngine is GovernedUpgradeable {
         }
         if (S == C) {
             ps.lastSnapshotEpoch = currentEpoch;
-            _observe(postId);
             return;
         }
         bool supportWins = S > C;
@@ -877,7 +888,6 @@ contract StakeEngine is GovernedUpgradeable {
         settledTotal[postId] = qs.total + qc.total; // post-mint/burn totals
 
         ps.lastSnapshotEpoch = currentEpoch;
-        _observe(postId); // patch_game_b: accrual changed the totals
 
         _updateSMax(postId, settledTotal[postId]); // just settled above
 
@@ -1384,7 +1394,6 @@ contract StakeEngine is GovernedUpgradeable {
         _rebalance(postId, ps, q, side); // patch_h1b_promotion: keep ranked = the C largest
         _recomputeWeightedPositions(postId, side, q);
         _recomputeSideTotal(q); // exact side total (ranked + bucketLive)
-        _observe(postId); // patch_game_b
         _refeedSMax(postId); // ruling 3b (settled, not live) + review R3 C-4 (drain snap-down)
     }
 
@@ -1416,7 +1425,6 @@ contract StakeEngine is GovernedUpgradeable {
         _rebalance(postId, ps, q, side); // patch_h1b_promotion: fill freed slots / swap boundary
         _recomputeWeightedPositions(postId, side, q);
         _recomputeSideTotal(q); // exact side total (ranked + bucketLive)
-        _observe(postId); // patch_game_b
     }
 
     /// @dev Project the bucket's live value forward one settlement at `rBase`
@@ -1646,7 +1654,7 @@ contract StakeEngine is GovernedUpgradeable {
         q.total = total + _bucketLive(q); // patch_h1a_bucket
     }
     // ── patch_game_b: two slots consumed from __gap (495 -> 493); layout re-baselined deliberately ──
-    mapping(uint256 => TimeWeighted.Observation[]) internal observations;
+    mapping(uint256 => TimeWeighted.Observation[]) internal observations; // unused since patch_sec004_present_pool; slot kept
     using TimeWeighted for TimeWeighted.Observation[];
     /// @dev ScoreEngine that supplies the effective pool at settlement (v17 §3.2). address(0) =
     ///      unwired (test harnesses): settlement uses direct totals, as v16 did.
