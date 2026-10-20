@@ -177,3 +177,18 @@ Goal:
 - ScoreEngine v2.1 enforces conservation of influence under the outgoing fan-out cap: only the parent's top-`maxOutgoingLinks` outgoing links by stake (with linkPostId-ascending tiebreak) participate in the distribution. Links outside that top-N contribute zero — they neither appear in the parent's denominator nor produce a numerator.
 - As a result, link spam past the cap has zero economic effect: the attacker burns the posting fee plus any link stake, and gets no influence in return. To displace one of the top-N, an attacker must outstake the smallest existing top-N entry (or, in case of a tie, the one with the largest linkPostId).
 - Within the cap, conservation of influence is preserved: the sum of `linkShare` across all top-N outgoing links is ≤ 1.0, so a parent's mass is fully and exclusively distributed among them.
+
+---
+
+## H. Relay Fee Collection (off-protocol, FeeCollector) <!-- patch_fee_collector -->
+
+### H.1 A compromised relay key drains users' fee allowances
+**Attack**
+- The relay charges its gas-indexed fee in VSP after a user's gasless action confirms, drawing on a standing allowance the user signed (100 VSP). With the relay's own wallet as the spender, a stolen relay key could `transferFrom` the whole allowance of every user at once, and wallets showed the permission as a spending cap to an unverified plain address.
+
+**Mitigations**
+- `src/FeeCollector.sol` is the spender users permit. Only registered collectors (the relay wallets) can call `collect(user, amount, ref)`, and every call is bounded on chain: `maxFeePerCollect` (deployed at 5 VSP, the relay's own per-action cap) and `maxPerUserPerDay` (25 VSP per user per UTC day). A stolen key is limited to the daily cap per user, not the allowance.
+- The Guardian Safe pauses collection instantly; only governance (the TimelockController, 48 h) unpauses, changes limits, the treasury or the collector set. Fees move straight from the user to the treasury; the contract never holds funds.
+- `ref` (the relayed transaction hash) is indexed on `FeeCollected`, so every fee is attributable to the action it paid for.
+- The relay's off-chain rule is unchanged: charge the lower of the quoted and the recomputed fee, never for a failed action. The contract only caps what the key can do; it does not price anything.
+- Slither (gate baseline, reviewed 2026-10-20): `arbitrary-send-erc20` on `collect` is the design — the `from` is the user whose allowance and daily window bound the call, and only a registered collector can reach it; `timestamp`/`incorrect-equality` are the UTC-day bucket (`block.timestamp / 1 days`), where a validator's few-second skew can only move a day boundary, never the caps.

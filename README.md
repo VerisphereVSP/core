@@ -42,6 +42,7 @@ core/
 │   ├── ScoreEngine.sol
 │   ├── ProtocolViews.sol
 │   ├── VSPToken.sol
+│   ├── FeeCollector.sol        # relay fee spender: bounded per call/day, pausable, Timelock-governed
 │   ├── authority/
 │   │   └── Authority.sol
 │   ├── governance/
