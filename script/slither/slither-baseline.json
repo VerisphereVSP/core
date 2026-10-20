@@ -1,9 +1,9 @@
 {
   "by_impact": {
-    "High": 0,
-    "Informational": 41,
-    "Low": 44,
-    "Medium": 48,
+    "High": 1,
+    "Informational": 42,
+    "Low": 45,
+    "Medium": 49,
     "Optimization": 2
   },
   "findings": [
@@ -14,6 +14,14 @@
       "fingerprint": "03ec73d4352dd917",
       "impact": "Informational",
       "location": "src/VSPToken.sol:180"
+    },
+    {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "remainingToday",
+      "fingerprint": "0593190b1fcec965",
+      "impact": "Medium",
+      "location": "src/FeeCollector.sol:158"
     },
     {
       "check": "unused-state",
@@ -29,7 +37,7 @@
       "element": "_writeSnapshot",
       "fingerprint": "0b01691d263c6c3f",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:191"
+      "location": "src/ScoreEngine.sol:196"
     },
     {
       "check": "reentrancy-no-eth",
@@ -37,7 +45,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:684"
+      "location": "src/StakeEngine.sol:711"
     },
     {
       "check": "reentrancy-no-eth",
@@ -45,7 +53,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:684"
+      "location": "src/StakeEngine.sol:711"
     },
     {
       "check": "reentrancy-no-eth",
@@ -53,7 +61,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:684"
+      "location": "src/StakeEngine.sol:711"
     },
     {
       "check": "reentrancy-no-eth",
@@ -61,7 +69,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:684"
+      "location": "src/StakeEngine.sol:711"
     },
     {
       "check": "reentrancy-no-eth",
@@ -69,7 +77,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:684"
+      "location": "src/StakeEngine.sol:711"
     },
     {
       "check": "reentrancy-no-eth",
@@ -77,7 +85,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:684"
+      "location": "src/StakeEngine.sol:711"
     },
     {
       "check": "reentrancy-no-eth",
@@ -85,7 +93,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:684"
+      "location": "src/StakeEngine.sol:711"
     },
     {
       "check": "reentrancy-no-eth",
@@ -93,7 +101,7 @@
       "element": "setStake",
       "fingerprint": "0bcb495258c8f03a",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:684"
+      "location": "src/StakeEngine.sol:711"
     },
     {
       "check": "incorrect-equality",
@@ -101,7 +109,7 @@
       "element": "_settleBucket",
       "fingerprint": "136d4d02ff0927b2",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1440"
+      "location": "src/StakeEngine.sol:1457"
     },
     {
       "check": "incorrect-equality",
@@ -109,7 +117,7 @@
       "element": "_projectLotValue",
       "fingerprint": "160f822661d43b1c",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1059"
+      "location": "src/StakeEngine.sol:1069"
     },
     {
       "check": "incorrect-equality",
@@ -117,7 +125,7 @@
       "element": "_projectLotValue",
       "fingerprint": "160f822661d43b1c",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1059"
+      "location": "src/StakeEngine.sol:1069"
     },
     {
       "check": "timestamp",
@@ -125,7 +133,7 @@
       "element": "_projectLotValue",
       "fingerprint": "232dac1e92878286",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1059"
+      "location": "src/StakeEngine.sol:1069"
     },
     {
       "check": "timestamp",
@@ -133,7 +141,7 @@
       "element": "_projectTotals",
       "fingerprint": "23fac9a2dc39448e",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1001"
+      "location": "src/StakeEngine.sol:1011"
     },
     {
       "check": "timestamp",
@@ -141,7 +149,7 @@
       "element": "_maybeSnapshot",
       "fingerprint": "295a69aafc4220d2",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:763"
+      "location": "src/StakeEngine.sol:790"
     },
     {
       "check": "incorrect-equality",
@@ -149,7 +157,7 @@
       "element": "_projectBucket",
       "fingerprint": "29f8e8529df820c6",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1415"
+      "location": "src/StakeEngine.sol:1432"
     },
     {
       "check": "naming-convention",
@@ -165,7 +173,7 @@
       "element": "stake",
       "fingerprint": "2bc8456d5b7492a2",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:595"
+      "location": "src/StakeEngine.sol:622"
     },
     {
       "check": "reentrancy-no-eth",
@@ -173,7 +181,7 @@
       "element": "stake",
       "fingerprint": "2bc8456d5b7492a2",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:595"
+      "location": "src/StakeEngine.sol:622"
     },
     {
       "check": "incorrect-equality",
@@ -181,7 +189,7 @@
       "element": "_applyEpochFor",
       "fingerprint": "2deecfc5af08e2e0",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:890"
+      "location": "src/StakeEngine.sol:900"
     },
     {
       "check": "naming-convention",
@@ -213,7 +221,7 @@
       "element": "_applySMaxDecay",
       "fingerprint": "38b7a222c16b58ec",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1141"
+      "location": "src/StakeEngine.sol:1151"
     },
     {
       "check": "costly-loop",
@@ -221,7 +229,7 @@
       "element": "_applySMaxDecay",
       "fingerprint": "38b7a222c16b58ec",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1141"
+      "location": "src/StakeEngine.sol:1151"
     },
     {
       "check": "costly-loop",
@@ -229,15 +237,15 @@
       "element": "_applySMaxDecay",
       "fingerprint": "38b7a222c16b58ec",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1141"
+      "location": "src/StakeEngine.sol:1151"
     },
     {
-      "check": "unused-return",
+      "check": "timestamp",
       "confidence": "Medium",
-      "element": "getTimeWeightedTotals",
-      "fingerprint": "3b9eba9fd78d5b69",
-      "impact": "Medium",
-      "location": "src/StakeEngine.sol:482"
+      "element": "remainingToday",
+      "fingerprint": "3d9edf38543619dc",
+      "impact": "Low",
+      "location": "src/FeeCollector.sol:158"
     },
     {
       "check": "timestamp",
@@ -245,7 +253,7 @@
       "element": "_activeAt",
       "fingerprint": "3fcfdb3b604db6ab",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:574"
+      "location": "src/ScoreEngine.sol:579"
     },
     {
       "check": "missing-zero-check",
@@ -261,7 +269,7 @@
       "element": "withdraw",
       "fingerprint": "47ec8394947a0821",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:637"
+      "location": "src/StakeEngine.sol:664"
     },
     {
       "check": "naming-convention",
@@ -277,7 +285,7 @@
       "element": "getEdgeContribution",
       "fingerprint": "49228752d6f85ec1",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:306"
+      "location": "src/ScoreEngine.sol:311"
     },
     {
       "check": "reentrancy-no-eth",
@@ -285,7 +293,7 @@
       "element": "_forceSnapshot",
       "fingerprint": "4c1f738ab81c6ecc",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:789"
+      "location": "src/StakeEngine.sol:806"
     },
     {
       "check": "reentrancy-no-eth",
@@ -293,7 +301,7 @@
       "element": "_forceSnapshot",
       "fingerprint": "4c1f738ab81c6ecc",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:789"
+      "location": "src/StakeEngine.sol:806"
     },
     {
       "check": "reentrancy-benign",
@@ -301,7 +309,7 @@
       "element": "withdraw",
       "fingerprint": "54b347d868f44e5d",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:637"
+      "location": "src/StakeEngine.sol:664"
     },
     {
       "check": "reentrancy-benign",
@@ -309,7 +317,7 @@
       "element": "_forceSnapshot",
       "fingerprint": "558c6d1b47de3929",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:789"
+      "location": "src/StakeEngine.sol:806"
     },
     {
       "check": "timestamp",
@@ -317,7 +325,7 @@
       "element": "_applySMaxDecay",
       "fingerprint": "55a3a4425ec9ad04",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1141"
+      "location": "src/StakeEngine.sol:1151"
     },
     {
       "check": "unused-state",
@@ -333,7 +341,7 @@
       "element": "count",
       "fingerprint": "572cafb82b399b10",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:518"
+      "location": "src/ScoreEngine.sol:523"
     },
     {
       "check": "timestamp",
@@ -341,7 +349,7 @@
       "element": "getPostTotals",
       "fingerprint": "5781a6a7a7e41f03",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:513"
+      "location": "src/StakeEngine.sol:540"
     },
     {
       "check": "constable-states",
@@ -365,7 +373,7 @@
       "element": "__gap",
       "fingerprint": "6099617d8a9f7597",
       "impact": "Informational",
-      "location": "src/LinkGraph.sol:169"
+      "location": "src/LinkGraph.sol:174"
     },
     {
       "check": "unused-state",
@@ -374,6 +382,14 @@
       "fingerprint": "625e700a1e09575a",
       "impact": "Informational",
       "location": "src/LinkGraph.sol:41"
+    },
+    {
+      "check": "timestamp",
+      "confidence": "Medium",
+      "element": "collect",
+      "fingerprint": "637bd8d96f2ac696",
+      "impact": "Low",
+      "location": "src/FeeCollector.sol:129"
     },
     {
       "check": "naming-convention",
@@ -389,7 +405,7 @@
       "element": "setStake",
       "fingerprint": "63ab651bac26de93",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:684"
+      "location": "src/StakeEngine.sol:711"
     },
     {
       "check": "reentrancy-benign",
@@ -397,7 +413,7 @@
       "element": "setStake",
       "fingerprint": "63ab651bac26de93",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:684"
+      "location": "src/StakeEngine.sol:711"
     },
     {
       "check": "reentrancy-benign",
@@ -405,7 +421,7 @@
       "element": "setStake",
       "fingerprint": "63ab651bac26de93",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:684"
+      "location": "src/StakeEngine.sol:711"
     },
     {
       "check": "incorrect-equality",
@@ -413,7 +429,7 @@
       "element": "_parentVsExcludingSelf",
       "fingerprint": "65403c5662ba32cf",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:391"
+      "location": "src/ScoreEngine.sol:396"
     },
     {
       "check": "incorrect-equality",
@@ -421,7 +437,7 @@
       "element": "_parentVsExcludingSelf",
       "fingerprint": "65403c5662ba32cf",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:391"
+      "location": "src/ScoreEngine.sol:396"
     },
     {
       "check": "incorrect-equality",
@@ -429,7 +445,7 @@
       "element": "_parentVsExcludingSelf",
       "fingerprint": "65403c5662ba32cf",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:391"
+      "location": "src/ScoreEngine.sol:396"
     },
     {
       "check": "constable-states",
@@ -445,7 +461,7 @@
       "element": "_projectBucket",
       "fingerprint": "691309b6162d9328",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1415"
+      "location": "src/StakeEngine.sol:1432"
     },
     {
       "check": "timestamp",
@@ -453,7 +469,7 @@
       "element": "_applyEpochFor",
       "fingerprint": "69cb6a76096d426e",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:890"
+      "location": "src/StakeEngine.sol:900"
     },
     {
       "check": "timestamp",
@@ -461,7 +477,7 @@
       "element": "getSnapshot",
       "fingerprint": "6f2c09ac4587e026",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:237"
+      "location": "src/ScoreEngine.sol:242"
     },
     {
       "check": "naming-convention",
@@ -477,7 +493,7 @@
       "element": "__gap",
       "fingerprint": "7d2b7acea2f7071e",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1649"
+      "location": "src/StakeEngine.sol:1666"
     },
     {
       "check": "missing-zero-check",
@@ -493,7 +509,7 @@
       "element": "_projectSideTotal",
       "fingerprint": "81bb502f4ce4f0a8",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1015"
+      "location": "src/StakeEngine.sol:1025"
     },
     {
       "check": "incorrect-equality",
@@ -501,7 +517,7 @@
       "element": "_projectSideTotal",
       "fingerprint": "81bb502f4ce4f0a8",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1015"
+      "location": "src/StakeEngine.sol:1025"
     },
     {
       "check": "naming-convention",
@@ -509,7 +525,7 @@
       "element": "__gap",
       "fingerprint": "842162b5e84eabbe",
       "impact": "Informational",
-      "location": "src/ScoreEngine.sol:607"
+      "location": "src/ScoreEngine.sol:612"
     },
     {
       "check": "naming-convention",
@@ -525,7 +541,7 @@
       "element": "_poolView",
       "fingerprint": "8882a8d31df946f4",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:288"
+      "location": "src/ScoreEngine.sol:293"
     },
     {
       "check": "reentrancy-benign",
@@ -541,7 +557,7 @@
       "element": "_freshness",
       "fingerprint": "8d1dc3d90c754d28",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:555"
+      "location": "src/ScoreEngine.sol:560"
     },
     {
       "check": "costly-loop",
@@ -549,7 +565,7 @@
       "element": "_updateSMax",
       "fingerprint": "8eef076714f26a9c",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1080"
+      "location": "src/StakeEngine.sol:1090"
     },
     {
       "check": "costly-loop",
@@ -557,7 +573,7 @@
       "element": "_updateSMax",
       "fingerprint": "8eef076714f26a9c",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1080"
+      "location": "src/StakeEngine.sol:1090"
     },
     {
       "check": "costly-loop",
@@ -565,7 +581,7 @@
       "element": "_updateSMax",
       "fingerprint": "8eef076714f26a9c",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1080"
+      "location": "src/StakeEngine.sol:1090"
     },
     {
       "check": "costly-loop",
@@ -573,7 +589,7 @@
       "element": "_updateSMax",
       "fingerprint": "8eef076714f26a9c",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1080"
+      "location": "src/StakeEngine.sol:1090"
     },
     {
       "check": "costly-loop",
@@ -581,7 +597,7 @@
       "element": "_updateSMax",
       "fingerprint": "8eef076714f26a9c",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1080"
+      "location": "src/StakeEngine.sol:1090"
     },
     {
       "check": "naming-convention",
@@ -605,7 +621,7 @@
       "element": "_projectTotals",
       "fingerprint": "981cd83ffc751b34",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1001"
+      "location": "src/StakeEngine.sol:1011"
     },
     {
       "check": "unused-state",
@@ -613,7 +629,7 @@
       "element": "__gap",
       "fingerprint": "989231729e0f9bd4",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:1649"
+      "location": "src/StakeEngine.sol:1666"
     },
     {
       "check": "missing-zero-check",
@@ -629,7 +645,7 @@
       "element": "getEdgeContribution",
       "fingerprint": "9bf91bdba7e3df36",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:306"
+      "location": "src/ScoreEngine.sol:311"
     },
     {
       "check": "incorrect-equality",
@@ -637,7 +653,7 @@
       "element": "getEdgeContribution",
       "fingerprint": "9bf91bdba7e3df36",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:306"
+      "location": "src/ScoreEngine.sol:311"
     },
     {
       "check": "incorrect-equality",
@@ -645,7 +661,7 @@
       "element": "getEdgeContribution",
       "fingerprint": "9bf91bdba7e3df36",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:306"
+      "location": "src/ScoreEngine.sol:311"
     },
     {
       "check": "reentrancy-events",
@@ -653,7 +669,7 @@
       "element": "_forceSnapshot",
       "fingerprint": "a3cc09fc353a83ba",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:789"
+      "location": "src/StakeEngine.sol:806"
     },
     {
       "check": "reentrancy-events",
@@ -661,7 +677,7 @@
       "element": "_forceSnapshot",
       "fingerprint": "a3cc09fc353a83ba",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:789"
+      "location": "src/StakeEngine.sol:806"
     },
     {
       "check": "naming-convention",
@@ -677,7 +693,7 @@
       "element": "_projectLot",
       "fingerprint": "a59da646ea0d1efb",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1039"
+      "location": "src/StakeEngine.sol:1049"
     },
     {
       "check": "timestamp",
@@ -685,7 +701,7 @@
       "element": "_forceSnapshot",
       "fingerprint": "a8b99e3f7d4cd22a",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:789"
+      "location": "src/StakeEngine.sol:806"
     },
     {
       "check": "timestamp",
@@ -693,15 +709,7 @@
       "element": "_parentVsExcludingSelf",
       "fingerprint": "a8e90fc7219d3b64",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:391"
-    },
-    {
-      "check": "timestamp",
-      "confidence": "Medium",
-      "element": "seedSnapshot",
-      "fingerprint": "aa412968dd943c1f",
-      "impact": "Low",
-      "location": "src/ScoreEngine.sol:169"
+      "location": "src/ScoreEngine.sol:396"
     },
     {
       "check": "timestamp",
@@ -709,7 +717,7 @@
       "element": "_projectRate",
       "fingerprint": "aaa4d45d91be8cc1",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:961"
+      "location": "src/StakeEngine.sol:971"
     },
     {
       "check": "timestamp",
@@ -717,7 +725,7 @@
       "element": "_incomingView",
       "fingerprint": "ab211f598e6a5dde",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:477"
+      "location": "src/ScoreEngine.sol:482"
     },
     {
       "check": "unused-state",
@@ -733,7 +741,7 @@
       "element": "refreshSMax",
       "fingerprint": "b07d4159aff96b88",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1111"
+      "location": "src/StakeEngine.sol:1121"
     },
     {
       "check": "naming-convention",
@@ -749,7 +757,15 @@
       "element": "_incoming",
       "fingerprint": "b41a67befc927580",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:435"
+      "location": "src/ScoreEngine.sol:440"
+    },
+    {
+      "check": "unused-state",
+      "confidence": "High",
+      "element": "observations",
+      "fingerprint": "b4d108984895ad33",
+      "impact": "Informational",
+      "location": "src/StakeEngine.sol:1657"
     },
     {
       "check": "timestamp",
@@ -757,7 +773,7 @@
       "element": "getUserLotInfo",
       "fingerprint": "b6ca2733f200d8fe",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:553"
+      "location": "src/StakeEngine.sol:580"
     },
     {
       "check": "incorrect-equality",
@@ -765,7 +781,7 @@
       "element": "_applySMaxDecay",
       "fingerprint": "b7948fbf4cf77067",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1141"
+      "location": "src/StakeEngine.sol:1151"
     },
     {
       "check": "timestamp",
@@ -773,7 +789,7 @@
       "element": "getUserStake",
       "fingerprint": "b83ace379b416a73",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:525"
+      "location": "src/StakeEngine.sol:552"
     },
     {
       "check": "naming-convention",
@@ -789,7 +805,15 @@
       "element": "_updateSMax",
       "fingerprint": "b92aea1b3eef9997",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1080"
+      "location": "src/StakeEngine.sol:1090"
+    },
+    {
+      "check": "arbitrary-send-erc20",
+      "confidence": "High",
+      "element": "collect",
+      "fingerprint": "bc6b2a6ecebd74d3",
+      "impact": "High",
+      "location": "src/FeeCollector.sol:129"
     },
     {
       "check": "incorrect-equality",
@@ -797,7 +821,7 @@
       "element": "_edge",
       "fingerprint": "bd4e934fc9f67873",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:353"
+      "location": "src/ScoreEngine.sol:358"
     },
     {
       "check": "incorrect-equality",
@@ -805,7 +829,7 @@
       "element": "_edge",
       "fingerprint": "bd4e934fc9f67873",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:353"
+      "location": "src/ScoreEngine.sol:358"
     },
     {
       "check": "timestamp",
@@ -813,7 +837,7 @@
       "element": "_fitsI96",
       "fingerprint": "bed776b1dbf071c5",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:581"
+      "location": "src/ScoreEngine.sol:586"
     },
     {
       "check": "naming-convention",
@@ -829,7 +853,7 @@
       "element": "_forceSnapshot",
       "fingerprint": "c006928ac5e07039",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:789"
+      "location": "src/StakeEngine.sol:806"
     },
     {
       "check": "incorrect-equality",
@@ -837,7 +861,7 @@
       "element": "_forceSnapshot",
       "fingerprint": "c006928ac5e07039",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:789"
+      "location": "src/StakeEngine.sol:806"
     },
     {
       "check": "missing-inheritance",
@@ -853,7 +877,7 @@
       "element": "sum",
       "fingerprint": "c0f8373a1a6fef10",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:182"
+      "location": "src/ScoreEngine.sol:187"
     },
     {
       "check": "unused-state",
@@ -877,7 +901,15 @@
       "element": "adj",
       "fingerprint": "c4c51ec5505914fc",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:398"
+      "location": "src/ScoreEngine.sol:403"
+    },
+    {
+      "check": "incorrect-equality",
+      "confidence": "High",
+      "element": "collect",
+      "fingerprint": "c6e8b106b1ef7cbb",
+      "impact": "Medium",
+      "location": "src/FeeCollector.sol:129"
     },
     {
       "check": "naming-convention",
@@ -909,7 +941,7 @@
       "element": "_projectSideTotal",
       "fingerprint": "d3d7859eec6e6003",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1015"
+      "location": "src/StakeEngine.sol:1025"
     },
     {
       "check": "timestamp",
@@ -917,7 +949,7 @@
       "element": "_edge",
       "fingerprint": "d58b255bbadaf26b",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:353"
+      "location": "src/ScoreEngine.sol:358"
     },
     {
       "check": "unused-state",
@@ -941,7 +973,7 @@
       "element": "setStake",
       "fingerprint": "dc1768351561c2fc",
       "impact": "Informational",
-      "location": "src/StakeEngine.sol:684"
+      "location": "src/StakeEngine.sol:711"
     },
     {
       "check": "unused-state",
@@ -949,7 +981,7 @@
       "element": "__gap",
       "fingerprint": "dceb4e4c7ef6d52e",
       "impact": "Informational",
-      "location": "src/LinkGraph.sol:169"
+      "location": "src/LinkGraph.sol:174"
     },
     {
       "check": "reentrancy-no-eth",
@@ -957,7 +989,7 @@
       "element": "refreshSMax",
       "fingerprint": "de33671b0b3b0d76",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1111"
+      "location": "src/StakeEngine.sol:1121"
     },
     {
       "check": "divide-before-multiply",
@@ -965,7 +997,7 @@
       "element": "_bucketRemove",
       "fingerprint": "e099e66a54a4b768",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:1268"
+      "location": "src/StakeEngine.sol:1278"
     },
     {
       "check": "timestamp",
@@ -973,7 +1005,7 @@
       "element": "_topK",
       "fingerprint": "e0d098289bdd4bf4",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:510"
+      "location": "src/ScoreEngine.sol:515"
     },
     {
       "check": "timestamp",
@@ -981,7 +1013,7 @@
       "element": "_incoming",
       "fingerprint": "e16651d64ce81bdf",
       "impact": "Low",
-      "location": "src/ScoreEngine.sol:435"
+      "location": "src/ScoreEngine.sol:440"
     },
     {
       "check": "incorrect-equality",
@@ -989,7 +1021,7 @@
       "element": "_topK",
       "fingerprint": "e1ae6c8ba83d1a84",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:510"
+      "location": "src/ScoreEngine.sol:515"
     },
     {
       "check": "incorrect-equality",
@@ -997,7 +1029,7 @@
       "element": "_topK",
       "fingerprint": "e1ae6c8ba83d1a84",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:510"
+      "location": "src/ScoreEngine.sol:515"
     },
     {
       "check": "incorrect-equality",
@@ -1005,7 +1037,7 @@
       "element": "_topK",
       "fingerprint": "e1ae6c8ba83d1a84",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:510"
+      "location": "src/ScoreEngine.sol:515"
     },
     {
       "check": "incorrect-equality",
@@ -1013,7 +1045,7 @@
       "element": "getSnapshot",
       "fingerprint": "e488078296376dc0",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:237"
+      "location": "src/ScoreEngine.sol:242"
     },
     {
       "check": "naming-convention",
@@ -1029,7 +1061,7 @@
       "element": "stake",
       "fingerprint": "e9daed0a65e92ae4",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:595"
+      "location": "src/StakeEngine.sol:622"
     },
     {
       "check": "unused-state",
@@ -1037,7 +1069,7 @@
       "element": "__gap",
       "fingerprint": "f0771cd3f859467b",
       "impact": "Informational",
-      "location": "src/ScoreEngine.sol:607"
+      "location": "src/ScoreEngine.sol:612"
     },
     {
       "check": "uninitialized-local",
@@ -1045,7 +1077,7 @@
       "element": "ahead",
       "fingerprint": "f4345e6e16362e4b",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:327"
+      "location": "src/ScoreEngine.sol:332"
     },
     {
       "check": "incorrect-equality",
@@ -1053,7 +1085,7 @@
       "element": "_projectRate",
       "fingerprint": "f6e178a5c17e8dad",
       "impact": "Medium",
-      "location": "src/StakeEngine.sol:961"
+      "location": "src/StakeEngine.sol:971"
     },
     {
       "check": "timestamp",
@@ -1061,7 +1093,7 @@
       "element": "_settleBucket",
       "fingerprint": "fabc5d90b8bd34ae",
       "impact": "Low",
-      "location": "src/StakeEngine.sol:1440"
+      "location": "src/StakeEngine.sol:1457"
     },
     {
       "check": "missing-zero-check",
@@ -1077,7 +1109,7 @@
       "element": "_writeSnapshot",
       "fingerprint": "fd719595c43a2053",
       "impact": "Medium",
-      "location": "src/ScoreEngine.sol:191"
+      "location": "src/ScoreEngine.sol:196"
     },
     {
       "check": "naming-convention",
@@ -1088,7 +1120,7 @@
       "location": "src/VSPToken.sol:193"
     }
   ],
-  "generated_utc": "2026-10-02T09:03:48.651378+00:00",
+  "generated_utc": "2026-10-20T09:46:52.745082+00:00",
   "scope": "src (excludes lib,test,script)",
-  "total": 135
+  "total": 139
 }

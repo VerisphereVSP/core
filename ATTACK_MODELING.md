@@ -191,3 +191,4 @@ Goal:
 - The Guardian Safe pauses collection instantly; only governance (the TimelockController, 48 h) unpauses, changes limits, the treasury or the collector set. Fees move straight from the user to the treasury; the contract never holds funds.
 - `ref` (the relayed transaction hash) is indexed on `FeeCollected`, so every fee is attributable to the action it paid for.
 - The relay's off-chain rule is unchanged: charge the lower of the quoted and the recomputed fee, never for a failed action. The contract only caps what the key can do; it does not price anything.
+- Slither (gate baseline, reviewed 2026-10-20): `arbitrary-send-erc20` on `collect` is the design — the `from` is the user whose allowance and daily window bound the call, and only a registered collector can reach it; `timestamp`/`incorrect-equality` are the UTC-day bucket (`block.timestamp / 1 days`), where a validator's few-second skew can only move a day boundary, never the caps.
